@@ -14,3 +14,4 @@ dashboard/web/node_modules/
 dashboard/web/dist/
 
 .claude/settings.local.json
+.superpowers/
