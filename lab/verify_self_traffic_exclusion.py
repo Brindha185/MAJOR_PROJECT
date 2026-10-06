@@ -69,4 +69,18 @@ assert len(result) == 1, "FAIL: simulate-mode chunk without src_ip should pass t
 print("PASS: simulate-mode chunk (no src_ip column) unaffected by the filter")
 
 print()
+print("--- Check 4: reverse-direction reply traffic (remote:443 -> own:ephemeral) is dropped; real inbound survives ---")
+rev = pd.DataFrame({
+    "src_ip":           ["142.250.1.1", "192.168.0.150", "192.168.0.151"],
+    "dst_ip":           [ips._own_ip,   ips._own_ip,     ips._own_ip],
+    "src_port":         [443,           51000,           51001],
+    "destination_port": [55000,         80,              2222],
+    "dos_flagged":      [True,          True,            True],
+})
+result = ips.process_chunk(rev)
+assert sorted(result["src_ip"]) == ["192.168.0.150", "192.168.0.151"], \
+    f"FAIL: reply row should drop, attackers (port 80, honeypot port) survive: {result}"
+print("PASS: reply flow dropped; inbound to port 80 and a honeypot port both survive")
+
+print()
 print("All checks passed.")

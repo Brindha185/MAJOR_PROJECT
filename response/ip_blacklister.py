@@ -39,7 +39,28 @@ _OS              = platform.system()   # "Windows" | "Linux" | "Darwin"
 _RULE_PREFIX     = "SENTINEL_BLOCK"    # prefix for named firewall rules
 
 
+_LOCAL_IPS_TTL_S = 30.0
+_local_ips_cache: tuple[float, set[str]] = (0.0, set())
+
+
 def _local_ips() -> set[str]:
+    """
+    TTL-cached wrapper around _scan_local_ips(). block() calls this once per
+    detection event, and the Scapy interface scan costs ~0.3ms -- profiled
+    2026-10-06 as ~70% of per-event response time during a flood. Short TTL
+    (not permanent) because interface addresses can change under DHCP.
+    """
+    global _local_ips_cache
+    now = time.monotonic()
+    stamp, cached = _local_ips_cache
+    if cached and now - stamp < _LOCAL_IPS_TTL_S:
+        return cached
+    fresh = _scan_local_ips()
+    _local_ips_cache = (now, fresh)
+    return fresh
+
+
+def _scan_local_ips() -> set[str]:
     """
     This machine's own IP addresses across all interfaces, plus loopback.
 

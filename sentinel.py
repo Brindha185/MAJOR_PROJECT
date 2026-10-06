@@ -142,6 +142,7 @@ _EXPLAIN_EVERY    = 500    # run SHAP narration every N detections
 _ZD_MINE_EVERY    = 2000   # run zero-day miner every N flows
 _RETRAIN_CHECK_S  = 3600   # check adaptive retrain every hour
 _LOG_INTERVAL     = 10_000 # progress log every N flows
+_MISTAKES_PER_CHUNK_MAX = 50  # cap Layer-1-miss samples collected per chunk
 
 # RESPONSE_MATRIX action string -> block duration (seconds; 0 = permanent)
 _BLOCK_ACTION_DURATIONS = {
@@ -156,7 +157,11 @@ _BLOCK_ACTION_DURATIONS = {
 # those -- it only checks injection patterns, not URL-shape indicators).
 _REQUEST_LINE_RE = re.compile(r"^(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(\S+)\s+HTTP/")
 
-_EXFIL_BYTES_THRESHOLD = 5_000_000   # 5MB combined fwd+bwd bytes per flow
+_HOST_HEADER_RE = re.compile(r"^Host:\s*([^\s:]+)", re.MULTILINE | re.IGNORECASE)
+_EPHEMERAL_PORT_MIN = 49152   # IANA dynamic range (Windows client ports)
+_NEUTRAL_URL_HOST ="127.0.0.1"   # private, so check_url()'s raw_ip_host rule skips it
+
+_EXFIL_BYTES_THRESHOLD = 5_000_000  # 5MB combined fwd+bwd bytes per flow
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +331,17 @@ class SentinelIPS:
         # captured (simulate mode) or own-IP resolution failed at startup.
         if self._own_ip and "src_ip" in chunk.columns:
             chunk = chunk[chunk["src_ip"] != self._own_ip]
+            # Reverse direction: when a capture picks a connection up
+            # mid-stream, a remote server's *reply* to this machine's own
+            # outbound request is oriented as the flow (remote:well-known
+            # -> own:ephemeral). No real inbound attack targets one of this
+            # machine's ephemeral client ports from a well-known source
+            # port, so this narrow pattern is reply traffic, not an attack.
+            if {"dst_ip", "src_port", "destination_port"} <= set(chunk.columns):
+                reply = ((chunk["dst_ip"] == self._own_ip)
+                         & (chunk["destination_port"] >= _EPHEMERAL_PORT_MIN)
+                         & (chunk["src_port"] < 1024))
+                chunk = chunk[~reply]
             if chunk.empty:
                 return chunk
 
@@ -521,7 +537,21 @@ class SentinelIPS:
                     match = _REQUEST_LINE_RE.match(payload)
                     if match:
                         dst_ip = chunk.at[idx, "dst_ip"] if has_dst_ip else ""
-                        url = f"http://{dst_ip}{match.group(1)}"
+                        # Prefer the request's own Host header over the
+                        # packet's numeric dst_ip: a server with a public IP
+                        # would otherwise have *every* inbound request
+                        # reconstructed as http://<public-ip>/..., tripping
+                        # check_url()'s raw_ip_host Phishing rule (hidden in
+                        # the lab only because lab IPs are private and that
+                        # rule exempts them). A Host equal to dst_ip says
+                        # nothing about the requested site, so fall back to
+                        # a neutral private host and let only path/query
+                        # checks run.
+                        host_m = _HOST_HEADER_RE.search(payload)
+                        host = host_m.group(1) if host_m else dst_ip
+                        if not host or host == dst_ip:
+                            host = _NEUTRAL_URL_HOST
+                        url = f"http://{host}{match.group(1)}"
                         hit = self._sig.check_url(url)
                         if not hit["detected"]:
                             # External reputation check (VirusTotal-backed);
@@ -545,6 +575,7 @@ class SentinelIPS:
             chunk = chunk.copy()
             chunk["sig_attack_type"]      = sig_types
             chunk["csrf_session_token"]   = csrf_tokens
+            self._record_layer1_misses(chunk, detected_mask)
             if "pred_binary" in chunk.columns:
                 chunk.loc[detected_mask, "pred_binary"] = 1
             else:
@@ -557,6 +588,38 @@ class SentinelIPS:
         except Exception as exc:
             logger.debug("Layer2 signature check error: %s", exc)
         return chunk
+
+    def _record_layer1_misses(self, chunk: pd.DataFrame,
+                              detected_mask: pd.Series) -> None:
+        """
+        Feed MistakeCollector the only live ground truth this pipeline has:
+        a Layer 2 signature hit is a deterministic exact-pattern match, so
+        any such flow Layer 1 scored benign (pred_binary == 0) is a
+        confirmed Layer 1 false negative. Must run before _run_signatures()
+        overwrites pred_binary. Statistical rule overrides (DoS/beacon/
+        exfil) are deliberately excluded -- they're heuristics, not ground
+        truth, and training on them would launder their errors into the
+        model. There is no equivalent live source of confirmed false
+        positives, so none are collected.
+        """
+        if "pred_binary" not in chunk.columns:
+            return
+        try:
+            miss_mask = detected_mask & (chunk["pred_binary"] == 0)
+            if not miss_mask.any():
+                return
+            skip = {"pred_binary", "confidence", "anomaly_score",
+                    "anomaly_detected", BINARY_LABEL_COL, MULTICLASS_LABEL_COL}
+            num_cols = [c for c in chunk.select_dtypes(include=[np.number]).columns
+                        if c not in skip]
+            for _, row in chunk[miss_mask].head(_MISTAKES_PER_CHUNK_MAX).iterrows():
+                self._mistakes.add(
+                    row[num_cols], predicted=0, corrected=1,
+                    confidence=float(row.get("confidence", 0.0)),
+                    mistake_type="FN",
+                )
+        except Exception as exc:
+            logger.warning("Mistake collection failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Beacon (Bot/C2) detection
