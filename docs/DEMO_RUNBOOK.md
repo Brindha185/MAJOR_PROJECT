@@ -10,6 +10,9 @@ Every attack validated live against real multi-host traffic this week. Ransomwar
 ## Phase 0 — Pre-Demo Setup (server machine, before anyone's watching)
 
 ```bash
+# 0. Pre-flight (elevated PowerShell) -- must print READY
+python lab\preflight.py --interface "Wi-Fi" --enforce-blocks
+
 # 1. Firewall rules (elevated PowerShell, once)
 netsh advfirewall firewall add rule name="SENTINEL_lab_target" dir=in action=allow protocol=TCP localport=80
 netsh advfirewall firewall add rule name="SENTINEL_lab_honeypot" dir=in action=allow protocol=TCP localport=2222,2121,8080,5432,9000
@@ -178,6 +181,16 @@ nmap -sS -T2 -p 21,22,23,25,80,443,445,3389,3306,8080 <server-ip>
 **Expect:** `attack=PortScan` — **not** Infiltration. Honest finding: the model treats any multi-port probing as PortScan-shaped regardless of speed, since it can't distinguish external recon from internal lateral movement at the flow-feature level. Real Infiltration-shaped traffic likely needs actual post-exploitation tooling to reproduce.
 
 ---
+
+## Offline Fallback — PCAP Replay (no network, no attackers, no admin needed)
+
+If venue Wi-Fi isolates clients or a laptop dies, replay a recording of the real multi-host attack session through the *same* live pipeline and dashboard:
+
+```bash
+.\venv\Scripts\python.exe sentinel.py live --pcap pcap\sentinel_20260825_102545_52170578.pcap --replay-speed 4
+# open http://localhost:5000
+```
+Plays SQLi → XSS → PathTraversal → WebShell → Phishing → PortScan in about a minute at 4x. Add `--loop` to repeat while you talk. Say plainly it's a recording of the live test; the pipeline is identical.
 
 ## If Something Breaks
 

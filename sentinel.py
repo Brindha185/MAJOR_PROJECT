@@ -33,6 +33,7 @@ import logging
 import re
 import socket
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -157,7 +158,8 @@ _BLOCK_ACTION_DURATIONS = {
 # those -- it only checks injection patterns, not URL-shape indicators).
 _REQUEST_LINE_RE = re.compile(r"^(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(\S+)\s+HTTP/")
 
-_HOST_HEADER_RE = re.compile(r"^Host:\s*([^\s:]+)", re.MULTILINE | re.IGNORECASE)
+_BINARY_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")   # C0 controls except \t \n \r
+_HOST_HEADER_RE =re.compile(r"^Host:\s*([^\s:]+)", re.MULTILINE | re.IGNORECASE)
 _EPHEMERAL_PORT_MIN = 49152   # IANA dynamic range (Windows client ports)
 _NEUTRAL_URL_HOST ="127.0.0.1"   # private, so check_url()'s raw_ip_host rule skips it
 
@@ -503,6 +505,13 @@ class SentinelIPS:
                     # structured binary header coincidentally contained a
                     # 0x7C byte, matching COMMAND_INJECTION_PATTERNS' "[|`]"
                     # and getting genuinely blocked as CommandInject.
+                    continue
+                if _BINARY_CTRL_RE.search(payload):
+                    # Random binary probe bytes (e.g. nmap's scan probes) can
+                    # decode as *valid* UTF-8 yet still contain C0 control
+                    # characters, which real HTTP text never does. Found in
+                    # the 2026-08-25 PCAP replay: scan-range ports 358/373
+                    # flagged SQLInjection/CommandInject off 7-byte garbage.
                     continue
 
                 # CSRF checked first and separately: it's a structural check
@@ -1282,6 +1291,58 @@ def _run_simulate(args) -> None:
 # Live capture mode
 # ---------------------------------------------------------------------------
 
+class _PcapReplayer:
+    """
+    Offline stand-in for Scapy's AsyncSniffer: streams a recorded PCAP into
+    the same prn callback, so the whole live pipeline (flow assembly, beacon/
+    DoS rate tracking, dashboard) runs with no network. Each packet is
+    re-timed to the current wall clock and paced by the original inter-packet
+    gaps (divided by `speed`, each gap capped at _REPLAY_MAX_GAP_S), so
+    cross-flow timing logic and idle-flow sweeps behave exactly as live.
+    Same start()/stop() surface as AsyncSniffer.
+    """
+
+    _REPLAY_MAX_GAP_S = 1.0
+
+    def __init__(self, pcap_path: str, prn, speed: float = 1.0, loop: bool = False) -> None:
+        self._path, self._prn = pcap_path, prn
+        self._speed, self._loop = max(speed, 0.01), loop
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="pcap-replay", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _run(self) -> None:
+        from scapy.utils import PcapReader
+        while not self._stop.is_set():
+            prev_ts, n = None, 0
+            try:
+                with PcapReader(self._path) as reader:
+                    for pkt in reader:
+                        if self._stop.is_set():
+                            return
+                        ts = float(pkt.time)
+                        if prev_ts is not None:
+                            gap = min(max(ts - prev_ts, 0.0), self._REPLAY_MAX_GAP_S) / self._speed
+                            if gap > 0.001:
+                                time.sleep(gap)
+                        prev_ts = ts
+                        pkt.time = time.time()
+                        self._prn(pkt)
+                        n += 1
+            except (OSError, ValueError) as exc:
+                logger.error("PCAP replay failed after %d packets: %s", n, exc)
+                return
+            logger.info("PCAP replay finished (%d packets)%s", n,
+                        " -- looping" if self._loop else "")
+            if not self._loop:
+                return
+
+
 def _run_live(args) -> None:
     """
     Real-time capture via Scapy.
@@ -1317,24 +1378,35 @@ def _run_live(args) -> None:
     collector = FlowCollector()
     eng       = NetworkFeatureEngineer(keep_raw=True)
 
+    replay = bool(getattr(args, "pcap", None))
     try:
-        from scapy.sendrecv import AsyncSniffer
-        flow_sniffer = AsyncSniffer(
-            iface=interface, filter=bpf_filter,
-            prn=collector.ingest_packet, store=False,
-        )
-        flow_sniffer.start()
-        logger.info("Flow-assembling sniffer started on %s", interface)
+        if replay:
+            if not Path(args.pcap).is_file():
+                raise FileNotFoundError(args.pcap)
+            flow_sniffer = _PcapReplayer(args.pcap, collector.ingest_packet,
+                                         speed=args.replay_speed, loop=args.loop)
+            flow_sniffer.start()
+            logger.info("Replaying %s at %.1fx (no network capture)",
+                        args.pcap, args.replay_speed)
+        else:
+            from scapy.sendrecv import AsyncSniffer
+            flow_sniffer = AsyncSniffer(
+                iface=interface, filter=bpf_filter,
+                prn=collector.ingest_packet, store=False,
+            )
+            flow_sniffer.start()
+            logger.info("Flow-assembling sniffer started on %s", interface)
     except Exception as exc:
         logger.error("Failed to start flow-assembling sniffer: %s", exc)
         ips.shutdown()
         return
 
-    try:
-        ips._pkt_logger.start_live_capture(interface, bpf_filter=bpf_filter)
-        logger.info("Forensic packet logger capturing on %s", interface)
-    except Exception as exc:
-        logger.warning("Packet logger capture failed: %s", exc)
+    if not replay:
+        try:
+            ips._pkt_logger.start_live_capture(interface, bpf_filter=bpf_filter)
+            logger.info("Forensic packet logger capturing on %s", interface)
+        except Exception as exc:
+            logger.warning("Packet logger capture failed: %s", exc)
 
     # Honeypot listeners bind real sockets, so they only start here (live
     # mode), not in SentinelIPS.__init__ -- instantiating them on every
@@ -1587,6 +1659,13 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Path to trained BenchmarkIDS pkl")
     live.add_argument("--enforce-blocks",action="store_true",
                       help="Enable OS-level IP blocking (requires root)")
+    live.add_argument("--pcap",          default=None,
+                      help="Replay this PCAP through the live pipeline instead of "
+                           "sniffing (offline demo fallback; no admin/network needed)")
+    live.add_argument("--replay-speed",  type=float, default=1.0,
+                      help="PCAP replay speed multiplier")
+    live.add_argument("--loop",          action="store_true",
+                      help="Restart the PCAP when it ends")
 
     # --- health ---
     sub.add_parser("health", help="Verify all 33 modules load cleanly")

@@ -65,4 +65,12 @@ assert sig_type == "CommandInject", f"FAIL: expected CommandInject, got {sig_typ
 print("PASS: real CommandInject payload still detected correctly")
 
 print()
+print("--- Check 3: valid-UTF-8 binary probe bytes (control chars) are skipped (2026-10-06 replay finding) ---")
+for probe in ("#>'1ƚ", "ҋ\"cC`p"):
+    result = run_signatures(probe)
+    sig_type = result.get("sig_attack_type", pd.Series([None])).iloc[0]
+    assert sig_type is None or pd.isna(sig_type), f"FAIL: probe {probe!r} matched as {sig_type!r}"
+print("PASS: nmap-style binary probes no longer flagged SQLInjection/CommandInject")
+
+print()
 print("All checks passed.")
