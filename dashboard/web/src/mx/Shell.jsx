@@ -1,22 +1,34 @@
 import { SEV_COLOR, SEV_ORDER } from '../attackInfo.js'
 
 export function TopBar({ page, setPage, info }) {
-  const tabs = [['live', '① Live Attack Map'], ['details', '② Attack Details'], ['mitre', '③ MITRE & Response']]
+  const tabs = [['live', 'Live Attack Map'], ['details', 'Attack Details'], ['mitre', 'MITRE & Response']]
   const enforce = !!info?.enforce
+  const mode = info?.mode === 'replay' ? 'REPLAY' : info?.mode === 'demo' ? 'DEMO DATA' : 'LIVE'
   return (
     <header className="top">
-      <div className="logo">SENTINEL<i> IPS</i></div>
+      <div className="brand">
+        <svg className="brand-mark" viewBox="-30 -34 60 68" aria-hidden="true">
+          <path d="M0 -30L26 -20V4C26 18 14 28 0 33C-14 28 -26 18 -26 4V-20Z" fill="#e3a857" />
+          <path d="M-11 2l8 9 15-18" fill="none" stroke="#1a1511" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div>
+          <div className="logo">SENTINEL<i> IPS</i></div>
+          <div className="tagline">Intrusion Prevention System</div>
+        </div>
+      </div>
       <nav className="tabs">
-        {tabs.map(([k, label]) => (
-          <button key={k} className={page === k ? 'on' : ''} onClick={() => setPage(k)}>{label}</button>
+        {tabs.map(([k, label], i) => (
+          <button key={k} className={page === k ? 'on' : ''} onClick={() => setPage(k)}>
+            <span className="num">{i + 1}</span>{label}
+          </button>
         ))}
       </nav>
       <div className="badges">
-        {info?.mode === 'replay' && <span className="badge">REPLAY (recorded session)</span>}
-        <span className={`badge ${enforce ? '' : 'off'}`}>
+        <span className={`badge mode ${mode === 'LIVE' ? 'live' : ''}`}><span className="pulse" />{mode}</span>
+        <span className={`badge ${enforce ? 'good' : 'warn'}`}>
           OS-level blocking: <b>{enforce ? 'ON' : 'OFF'}</b>
         </span>
-        {info?.server_ip && <span className="badge">server {info.server_ip}</span>}
+        {info?.server_ip && <span className="badge">Server {info.server_ip}</span>}
       </div>
     </header>
   )
