@@ -4,8 +4,8 @@ import { THEME } from '../attackInfo.js'
 const N = 140            // points visible on the strip (~20 s of history at PACE_MS)
 const PACE_MS = 140      // one new point every 140 ms (~7/s): calm enough to read
 const MAX_QUEUE = 25     // ~3.5 s of lag at most; beyond this, thin out ordinary points so the strip never lags far behind
-const LO = -0.3
-const HI = 0.3
+const MIN_LO = -0.12     // y-range never gets tighter than this around the threshold (0)
+const MIN_HI = 0.12
 const RED = '#f04848'
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
@@ -48,6 +48,10 @@ export default function ScoreStrip({ anomaly }) {
     let raf = 0
     let lastRelease = performance.now()
     const interval = PACE_MS
+    // Real IsolationForest scores don't sit where demo data did, so the y-range fits
+    // itself to what is on screen (easing, to avoid jitter) while keeping 0 = threshold.
+    let lo = MIN_LO
+    let hi = MIN_HI
 
     // The canvas is created while its tab may be hidden (display:none => 0x0), so
     // re-fit the backing store to the real on-screen size on every frame instead of
@@ -77,7 +81,12 @@ export default function ScoreStrip({ anomaly }) {
       }
       const t = clamp((now - lastRelease) / interval, 0, 1)
       const dx = W / (N - 1)
-      const y = (v) => H - ((clamp(v, LO, HI) - LO) / (HI - LO)) * H
+      let mn = 0
+      let mx = 0
+      for (const p of buf.current) { if (p.score < mn) mn = p.score; if (p.score > mx) mx = p.score }
+      lo += (Math.min(MIN_LO, mn - 0.04) - lo) * 0.06
+      hi += (Math.max(MIN_HI, mx + 0.04) - hi) * 0.06
+      const y = (v) => H - ((clamp(v, lo, hi) - lo) / (hi - lo)) * H
 
       ctx.clearRect(0, 0, W, H)
       ctx.fillStyle = 'rgba(240,72,72,.10)'
