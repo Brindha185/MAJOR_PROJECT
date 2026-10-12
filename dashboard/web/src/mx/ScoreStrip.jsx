@@ -39,17 +39,24 @@ export default function ScoreStrip({ anomaly }) {
     let lastRelease = performance.now()
     let interval = 100
 
-    const resize = () => {
+    // The canvas is created while its tab may be hidden (display:none => 0x0), so
+    // re-fit the backing store to the real on-screen size on every frame instead of
+    // only once at mount / on window resize.
+    const fit = () => {
       const dpr = window.devicePixelRatio || 1
-      const r = canvas.getBoundingClientRect()
-      canvas.width = Math.round(r.width * dpr)
-      canvas.height = Math.round(r.height * dpr)
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      const w = Math.round(canvas.clientWidth * dpr)
+      const h = Math.round(canvas.clientHeight * dpr)
+      if (w === 0 || h === 0) return false
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      }
+      return true
     }
-    resize()
-    window.addEventListener('resize', resize)
 
     const frame = (now) => {
+      if (!fit()) { raf = requestAnimationFrame(frame); return }     // tab hidden: nothing to draw
       const W = canvas.clientWidth
       const H = canvas.clientHeight
       // Release queued points at a pace that drains the queue between payloads.
@@ -134,7 +141,7 @@ export default function ScoreStrip({ anomaly }) {
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize) }
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   return <canvas ref={canvasRef} className="strip" />
