@@ -25,7 +25,7 @@ import logging
 import re
 from collections import OrderedDict
 from typing import Dict, List, Optional
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, unquote_plus, urlparse
 
 from config import (
     COMMAND_INJECTION_PATTERNS,
@@ -35,6 +35,27 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_variants(text: str) -> tuple:
+    """
+    The text as seen on the wire, percent-decoded, and percent-decoded with '+'
+    read as a space. Query strings and form bodies are application/x-www-form-
+    urlencoded, where most HTTP clients (curl included) encode a space as '+':
+    `q=%3B+wget+http...` only becomes `; wget http...` once '+' is decoded too.
+    Matching only unquote() missed that, so a '+'-encoded command injection slipped
+    past the payload check (and was later mislabelled SQLi by the URL check on the
+    still-encoded ';'). Found live 2026-10-13.
+    """
+    out = [text]
+    for fn in (unquote, unquote_plus):
+        try:
+            d = fn(text)
+        except Exception:
+            continue
+        if d not in out:
+            out.append(d)
+    return tuple(out)
 
 # ---------------------------------------------------------------------------
 # Additional patterns not in config.py
@@ -291,12 +312,7 @@ class SignatureDetector:
         if not payload:
             return _no_detection()
 
-        try:
-            decoded = unquote(payload)
-        except Exception:
-            decoded = payload
-
-        for text in (payload, decoded):
+        for text in _decode_variants(payload):
             for patterns, atype in (
                 (self._shell_re, "WebShell"),
                 (self._sql_re,  "SQLInjection"),
@@ -325,7 +341,7 @@ class SignatureDetector:
             return _no_detection()
 
         try:
-            decoded_url = unquote(url)
+            decoded_url = unquote_plus(url)
         except Exception:
             decoded_url = url
 
@@ -536,12 +552,7 @@ class SignatureDetector:
             (self._path_re, "PathTraversal"),
         ]
 
-        try:
-            decoded = unquote(data)
-        except Exception:
-            decoded = data
-
-        for text in (data, decoded):
+        for text in _decode_variants(data):
             for patterns, atype in checks:
                 if atype in seen_types:
                     continue
