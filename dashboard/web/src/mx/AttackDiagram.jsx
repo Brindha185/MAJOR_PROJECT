@@ -205,12 +205,12 @@ export default function AttackDiagram({ attackers, events, underAttack }) {
         const y = pos[ip]
         const active = (a.lastAge ?? 99) < 10
         const col = SEV_COLOR[a.severity] || THEME.accent
-        const stroke = a.blocked ? '#6b5a48' : active ? col : THEME.accent
+        const stroke = a.blocked ? '#8a7560' : active ? col : '#a8927a'
         const cls = `node ${a.blocked ? 'blocked' : active ? 'active' : 'idle'}`
         return (
           <g key={ip} className={cls} data-ip={ip}>
             <line x1={LINE_FROM} y1={y} x2={LINE_TO} y2={SERVER.y}
-              stroke={a.blocked ? '#3a2f26' : active ? col : THEME.lineIdle} strokeWidth="2.5"
+              stroke={a.blocked ? '#55443a' : active ? col : THEME.lineIdle} strokeWidth="2.5"
               strokeDasharray={active && !a.blocked ? '0' : '8 8'} strokeLinecap="round" />
             <g transform={`translate(${NODE_X},${y})`}>
               <g className="icon"><LaptopGlyph stroke={stroke} active={active && !a.blocked} banned={a.blocked} /></g>

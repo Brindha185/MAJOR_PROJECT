@@ -11,7 +11,7 @@ function AttackerCards({ attackers }) {
       {attackers.map((a) => (
         <div className={`acard ${a.blocked ? 'is-blocked' : ''}`} key={a.ip}>
           <div className="atop">
-            <span className="aicon"><LaptopMini size={72} color={a.blocked ? '#6b5a48' : undefined} /></span>
+            <span className="aicon"><LaptopMini size={72} color={a.blocked ? '#8a7560' : undefined} /></span>
             <div className="ameta">
               <div className="ip mono">{a.ip}</div>
               <div className="astat">
@@ -94,7 +94,7 @@ export default function DetailsPage({ events, attackers, attackCounts }) {
                 <td><Sev s={e.severity} /></td>
                 <td>{e.detected_by || '—'}</td>
                 <td style={{ color: '#c9d3e6' }}>{responseText(e)}</td>
-                <td>{e.blocked ? <span className="chip" style={{ '--c': '#9ccf8f' }}>BLOCKED</span> : <span className="chip grey">—</span>}</td>
+                <td>{e.blocked ? <span className="chip" style={{ '--c': '#7ad17f' }}>BLOCKED</span> : <span className="chip grey">—</span>}</td>
               </tr>
             ))}
           </tbody>

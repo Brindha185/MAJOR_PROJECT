@@ -110,7 +110,7 @@ export default function Pipeline({ events, anomaly }) {
         {box(3, '③ Anomaly detector', 'never-seen-before')}
       </div>
       <div className={`pl-token t${tok}`} />
-      <div className="pl-verdict" style={{ color: verdict.bad ? '#ea5a4f' : '#9ccf8f' }}>{verdict.text}</div>
+      <div className="pl-verdict" style={{ color: verdict.bad ? '#f04848' : '#7ad17f' }}>{verdict.text}</div>
     </div>
   )
 }

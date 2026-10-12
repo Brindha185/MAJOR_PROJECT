@@ -28,7 +28,7 @@ export default function FeedCards({ events }) {
               {tech && <> &nbsp;<span className="chip mt">{tech}</span></>}
             </div>
             <p>{info.desc}</p>
-            <div className="m">{e.blocked ? '✓ ' : '→ '}<b style={e.blocked ? { color: '#9ccf8f' } : undefined}>{responseText(e)}</b></div>
+            <div className="m">{e.blocked ? '✓ ' : '→ '}<b style={e.blocked ? { color: '#7ad17f' } : undefined}>{responseText(e)}</b></div>
           </div>
         )
       })}

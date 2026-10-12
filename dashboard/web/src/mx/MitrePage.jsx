@@ -23,7 +23,7 @@ export default function MitrePage({ events, attackCounts }) {
                 const n = counts[k]
                 return (
                   <div className={`tech ${n ? 'hit' : ''}`} key={k}
-                    style={n ? { '--c': SEV_COLOR[sev[k]] || '#e3a857' } : undefined}>
+                    style={n ? { '--c': SEV_COLOR[sev[k]] || '#ead7b0' } : undefined}>
                     {i.label}{n ? ` ×${n}` : ''}
                     <small>{i.tech || 'unmapped'}</small>
                   </div>

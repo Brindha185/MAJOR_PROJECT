@@ -8,7 +8,7 @@ export function TopBar({ page, setPage, info }) {
     <header className="top">
       <div className="brand">
         <svg className="brand-mark" viewBox="-30 -34 60 68" aria-hidden="true">
-          <path d="M0 -30L26 -20V4C26 18 14 28 0 33C-14 28 -26 18 -26 4V-20Z" fill="#e3a857" />
+          <path d="M0 -30L26 -20V4C26 18 14 28 0 33C-14 28 -26 18 -26 4V-20Z" fill="#ead7b0" />
           <path d="M-11 2l8 9 15-18" fill="none" stroke="#1a1511" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div>
@@ -53,18 +53,18 @@ export function StatusBanner({ latest, underAttack, enforce }) {
 }
 
 const SPARK = [
-  ['#ea5a4f', 'M0 34 C15 30 20 8 35 20 S60 36 75 14 90 6 100 10'],
-  ['#9ccf8f', 'M0 36 C20 34 30 24 45 22 S75 14 100 6'],
-  ['#e3a857', 'M0 30 C15 10 30 36 45 18 S75 30 100 12'],
+  ['#f04848', 'M0 34 C15 30 20 8 35 20 S60 36 75 14 90 6 100 10'],
+  ['#7ad17f', 'M0 36 C20 34 30 24 45 22 S75 14 100 6'],
+  ['#ead7b0', 'M0 30 C15 10 30 36 45 18 S75 30 100 12'],
 ]
 
 export function KpiCards({ monitor, blockedCount, topSeverity }) {
   const fps = Math.round(monitor?.current_fps ?? 0)
   const cards = [
-    ['Attacks detected', (monitor?.total_attacks ?? 0).toLocaleString(), '#ea5a4f', SPARK[0]],
-    ['Attackers blocked', blockedCount, '#9ccf8f', SPARK[1]],
-    ['Flows / sec', fps.toLocaleString(), '#e3a857', SPARK[2]],
-    ['Highest severity', topSeverity || '—', SEV_COLOR[topSeverity] || '#ad9d89', null],
+    ['Attacks detected', (monitor?.total_attacks ?? 0).toLocaleString(), '#f04848', SPARK[0]],
+    ['Attackers blocked', blockedCount, '#7ad17f', SPARK[1]],
+    ['Flows / sec', fps.toLocaleString(), '#ead7b0', SPARK[2]],
+    ['Highest severity', topSeverity || '—', SEV_COLOR[topSeverity] || '#cdbba4', null],
   ]
   return (
     <div className="kpis">

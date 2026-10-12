@@ -2,11 +2,11 @@
 // MITRE mapping, and the automatic response chain (mirrors config.RESPONSE_MATRIX).
 // Warm palette (mirrors the CSS variables in modern.css).
 export const THEME = {
-  accent: '#e3a857', ok: '#9ccf8f', ink: '#f4eadb', dim: '#ad9d89',
-  panel: '#251e18', panel2: '#2f261e', line: '#473a2e', lineIdle: '#5a4a3b',
+  accent: '#ead7b0', ok: '#7ad17f', ink: '#fbf3e6', dim: '#cdbba4',
+  panel: '#352a20', panel2: '#41342a', line: '#6a5645', lineIdle: '#7a6652',
 }
 export const SEV_COLOR = {
-  CRITICAL: '#ea5a4f', HIGH: '#f0914a', MEDIUM: '#efc15a', LOW: '#93c98a', INFO: '#c9a27f',
+  CRITICAL: '#f04848', HIGH: '#ff8c1a', MEDIUM: '#ffd23f', LOW: '#5cc96b', INFO: '#b8a58f',
 }
 export const SEV_ORDER = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 export const TACTICS = ['Discovery', 'Initial Access', 'Execution', 'Persistence',

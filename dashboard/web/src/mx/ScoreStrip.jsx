@@ -4,7 +4,7 @@ import { THEME } from '../attackInfo.js'
 const N = 150            // points visible on the strip
 const LO = -0.3
 const HI = 0.3
-const RED = '#ea5a4f'
+const RED = '#f04848'
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 
@@ -64,11 +64,11 @@ export default function ScoreStrip({ anomaly }) {
       const y = (v) => H - ((clamp(v, LO, HI) - LO) / (HI - LO)) * H
 
       ctx.clearRect(0, 0, W, H)
-      ctx.fillStyle = 'rgba(234,90,79,.10)'
+      ctx.fillStyle = 'rgba(240,72,72,.10)'
       ctx.fillRect(0, y(0), W, H - y(0))
-      ctx.fillStyle = 'rgba(156,207,143,.06)'
+      ctx.fillStyle = 'rgba(122,209,127,.06)'
       ctx.fillRect(0, 0, W, y(0))
-      ctx.strokeStyle = 'rgba(71,58,46,.9)'
+      ctx.strokeStyle = 'rgba(106,86,69,.9)'
       ctx.lineWidth = 1
       for (let i = 1; i < 6; i++) {
         ctx.beginPath(); ctx.moveTo(0, (H * i) / 6); ctx.lineTo(W, (H * i) / 6); ctx.stroke()
@@ -83,7 +83,7 @@ export default function ScoreStrip({ anomaly }) {
       ctx.fillText('anomaly threshold', W - 150, y(0) - 8)
       ctx.fillStyle = THEME.ok
       ctx.fillText('normal traffic', W - 110, 22)
-      ctx.fillStyle = '#f3a39c'
+      ctx.fillStyle = '#ff9a9a'
       ctx.fillText('outlier zone', W - 100, H - 10)
 
       const pts = buf.current
@@ -102,7 +102,7 @@ export default function ScoreStrip({ anomaly }) {
           if (pts[k].score >= 0) continue
           ctx.fillStyle = RED
           ctx.beginPath(); ctx.arc(x(k), y(pts[k].score), 6, 0, 7); ctx.fill()
-          ctx.strokeStyle = 'rgba(234,90,79,.5)'
+          ctx.strokeStyle = 'rgba(240,72,72,.5)'
           ctx.lineWidth = 2
           ctx.beginPath(); ctx.arc(x(k), y(pts[k].score), pulse, 0, 7); ctx.stroke()
         }
@@ -113,20 +113,20 @@ export default function ScoreStrip({ anomaly }) {
         ctx.fillStyle = 'rgba(26,21,17,.78)'
         ctx.fillRect(0, 0, W, H)
         ctx.textAlign = 'center'
-        ctx.fillStyle = '#f4eadb'
+        ctx.fillStyle = '#fbf3e6'
         ctx.font = '700 22px "Segoe UI", sans-serif'
         ctx.fillText('Learning what normal traffic looks like…', W / 2, H / 2 - 18)
         ctx.font = '500 16px "Segoe UI", sans-serif'
-        ctx.fillStyle = '#ad9d89'
+        ctx.fillStyle = '#cdbba4'
         ctx.fillText(`${st.buffered} / ${st.needed} normal flows observed`, W / 2, H / 2 + 12)
-        ctx.fillStyle = '#473a2e'
+        ctx.fillStyle = '#6a5645'
         ctx.fillRect(W / 2 - 160, H / 2 + 30, 320, 10)
         ctx.fillStyle = THEME.accent
         ctx.fillRect(W / 2 - 160, H / 2 + 30, 320 * clamp(st.buffered / st.needed, 0, 1), 10)
         ctx.textAlign = 'start'
       } else if (!pts.length) {
         ctx.textAlign = 'center'
-        ctx.fillStyle = '#ad9d89'
+        ctx.fillStyle = '#cdbba4'
         ctx.font = '500 17px "Segoe UI", sans-serif'
         ctx.fillText('Waiting for traffic…', W / 2, H / 2)
         ctx.textAlign = 'start'
