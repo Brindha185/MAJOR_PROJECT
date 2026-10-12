@@ -227,8 +227,11 @@ export default function AttackDiagram({ attackers, events, underAttack }) {
         <animate attributeName="r" values="92;112;92" dur="3.4s" repeatCount="indefinite" />
         <animate attributeName="stroke-opacity" values=".3;.05;.3" dur="3.4s" repeatCount="indefinite" />
       </circle>
-      <g ref={srvRef} transform={`translate(${SERVER.x},${SERVER.y})`}>
-        <ServerGlyph alert={underAttack} />
+      {/* Position lives on the outer <g>; the shake animates the inner one. A CSS
+          transform replaces (not adds to) a transform attribute, so animating the
+          positioned group itself threw the rack to the SVG origin mid-shake. */}
+      <g transform={`translate(${SERVER.x},${SERVER.y})`}>
+        <g ref={srvRef}><ServerGlyph alert={underAttack} /></g>
       </g>
       <text x={SERVER.x} y={SERVER.y + 124} textAnchor="middle" className="srv-label">SERVER</text>
       {!nodes.length && (
