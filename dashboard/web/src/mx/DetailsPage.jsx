@@ -9,14 +9,22 @@ function AttackerCards({ attackers }) {
   return (
     <div className="acards">
       {attackers.map((a) => (
-        <div className="acard" key={a.ip}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span className="ip mono"><LaptopMini size={30} />{a.ip}</span>
-            {a.blocked ? <span className="chip grey">BLOCKED</span> : <span className="chip sevHIGH">ACTIVE</span>}
+        <div className={`acard ${a.blocked ? 'is-blocked' : ''}`} key={a.ip}>
+          <div className="atop">
+            <span className="aicon"><LaptopMini size={72} color={a.blocked ? '#6b5a48' : undefined} /></span>
+            <div className="ameta">
+              <div className="ip mono">{a.ip}</div>
+              <div className="astat">
+                {a.blocked ? <span className="chip grey">BLOCKED</span> : <span className="chip sevHIGH">ACTIVE</span>}
+                <span>since {a.firstTime}</span>
+              </div>
+            </div>
+            <div className="acount"><b>{a.count}</b><span>attacks</span></div>
           </div>
-          <div className="row"><span>{a.count} attacks</span><span>since {a.firstTime}</span></div>
-          <div style={{ marginTop: 8, fontSize: 13, color: '#c9d3e6' }}>{a.types.map((t) => infoFor(t).label).join(' · ')}</div>
-          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--dim)' }}>profile: {a.actorClass}</div>
+          <div className="atypes">
+            {a.types.map((t) => <span className="chip mt" key={t}>{infoFor(t).label}</span>)}
+          </div>
+          <div className="aprof">Attacker profile: <b>{a.actorClass}</b></div>
         </div>
       ))}
     </div>

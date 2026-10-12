@@ -54,9 +54,20 @@ nav.tabs button.on{color:var(--ink);border-color:var(--accent);background:rgba(2
 .stamp{position:absolute;right:14px;top:40px;border:2px solid var(--ok);color:var(--ok);padding:0 10px;font-weight:800;letter-spacing:.08em;font-size:13px;transform:rotate(-7deg);border-radius:5px;animation:st .4s cubic-bezier(.2,1.2,.3,1)}
 @keyframes st{from{transform:rotate(-7deg) scale(2.2);opacity:0}}
 .sevCRITICAL{--c:var(--crit)}.sevHIGH{--c:var(--high)}.sevMEDIUM{--c:var(--med)}.sevLOW{--c:var(--low)}.sevINFO{--c:var(--info)}
-.acards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:16px}
-.acard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 18px}
-.acard .ip{font-size:19px;font-weight:700;display:flex;align-items:center;gap:10px}.acard .row{display:flex;justify-content:space-between;color:var(--dim);font-size:13px;margin-top:7px}
+.acards{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:18px;margin-bottom:20px}
+.acard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 24px;transition:border-color .3s,opacity .3s}
+.acard.is-blocked{opacity:.82}
+.atop{display:flex;align-items:center;gap:18px}
+.aicon{flex:none;display:flex;align-items:center;justify-content:center;width:96px;height:80px;background:var(--bg);border:1px solid var(--line);border-radius:14px}
+.ameta{flex:1;min-width:0}
+.acard .ip{font-size:25px;font-weight:700;letter-spacing:.01em}
+.astat{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:14px;margin-top:6px}
+.acount{flex:none;text-align:right;line-height:1}
+.acount b{display:block;font-size:50px;font-weight:800;font-variant-numeric:tabular-nums}
+.acount span{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.atypes{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.atypes .chip.mt{font-family:var(--sans);font-size:13.5px;padding:4px 12px;color:var(--ink)}
+.aprof{margin-top:14px;font-size:14px;color:var(--dim)}.aprof b{color:var(--ink);font-weight:600}
 .tools{display:flex;gap:10px;margin-bottom:12px}
 .tools input,.tools select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);padding:9px 13px;border-radius:9px;font-size:14px;font-family:var(--sans)}
 .tools input{flex:1;max-width:340px}
