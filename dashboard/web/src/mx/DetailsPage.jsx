@@ -82,7 +82,7 @@ export default function DetailsPage({ events, attackers, attackCounts }) {
           </select>
         </div>
         <table>
-          <thead><tr><th>Time</th><th>Attack</th><th>Source IP</th><th>Port</th><th>Conf</th><th>Severity</th><th>Response</th><th>Status</th></tr></thead>
+          <thead><tr><th>Time</th><th>Attack</th><th>Source IP</th><th>Port</th><th>Conf</th><th>Severity</th><th>Detected by</th><th>Response</th><th>Status</th></tr></thead>
           <tbody>
             {rows.map((e) => (
               <tr className="r" key={e.id} onClick={() => setSelId(e.id)}>
@@ -92,6 +92,7 @@ export default function DetailsPage({ events, attackers, attackCounts }) {
                 <td className="mono">{e.dst_port || '—'}</td>
                 <td>{e.confidence}</td>
                 <td><Sev s={e.severity} /></td>
+                <td>{e.detected_by || '—'}</td>
                 <td style={{ color: '#c9d3e6' }}>{responseText(e)}</td>
                 <td>{e.blocked ? <span className="chip" style={{ '--c': '#9ccf8f' }}>BLOCKED</span> : <span className="chip grey">—</span>}</td>
               </tr>

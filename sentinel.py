@@ -159,6 +159,8 @@ _BLOCK_ACTION_DURATIONS = {
 _REQUEST_LINE_RE = re.compile(r"^(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(\S+)\s+HTTP/")
 
 _BINARY_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")   # C0 controls except \t \n \r
+_RULE_TYPES = frozenset({"Bot", "DoS", "DDoS", "Exfiltration"})   # statistical rule overrides, not payload signatures
+_ANOMALY_SAMPLE_PER_CHUNK = 30   # scores sent to the dashboard per chunk (plus every flagged flow, capped)
 _HOST_HEADER_RE =re.compile(r"^Host:\s*([^\s:]+)", re.MULTILINE | re.IGNORECASE)
 _EPHEMERAL_PORT_MIN = 49152   # IANA dynamic range (Windows client ports)
 _NEUTRAL_URL_HOST ="127.0.0.1"   # private, so check_url()'s raw_ip_host rule skips it
@@ -833,15 +835,19 @@ class SentinelIPS:
                 if benign_mask.any():
                     self._anomaly_baseline_buffer.append(X_num[benign_mask])
                 buffered = sum(len(b) for b in self._anomaly_baseline_buffer)
+                self._monitor.set_anomaly_state(False, min(buffered, 100), 100)
                 if buffered >= 100:
                     baseline = pd.concat(self._anomaly_baseline_buffer, ignore_index=True)
                     self._anomaly.fit(baseline)
                     self._anomaly_fitted = True
                     self._anomaly_baseline_buffer = []
+                    self._monitor.set_anomaly_state(True, 100, 100)
 
             if self._anomaly_fitted:
                 result_df = self._anomaly.predict(X_num)
                 if "anomaly_score" in result_df.columns:
+                    self._record_anomaly_scores(result_df["anomaly_score"].values,
+                                                result_df["anomaly_detected"].values)
                     chunk = chunk.copy()
                     chunk["anomaly_score"]    = result_df["anomaly_score"].values
                     chunk["anomaly_detected"] = result_df["anomaly_detected"].values
@@ -854,6 +860,20 @@ class SentinelIPS:
         except Exception as exc:
             logger.debug("Anomaly detection error: %s", exc)
         return chunk
+
+    def _record_anomaly_scores(self, scores, flags) -> None:
+        """Send the dashboard a bounded sample of this chunk's anomaly scores
+        (evenly spaced, plus flagged flows) and the exact counts."""
+        try:
+            n = len(scores)
+            if n == 0:
+                return
+            flags = np.asarray(flags, dtype=bool)
+            pick = set(np.linspace(0, n - 1, min(n, _ANOMALY_SAMPLE_PER_CHUNK), dtype=int).tolist())
+            pick.update(np.flatnonzero(flags)[:_ANOMALY_SAMPLE_PER_CHUNK].tolist())
+            self._monitor.record_anomaly([float(scores[i]) for i in sorted(pick)], n, int(flags.sum()))
+        except Exception as exc:
+            logger.debug("Anomaly score recording failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Event construction
@@ -868,7 +888,9 @@ class SentinelIPS:
                 # payload-based attack (SQLi/XSS) is only ever a generic
                 # flow-shape guess since Layer 1 never sees payload content.
                 attack_type = str(sig_type)
+                detected_by = "Rule" if attack_type in _RULE_TYPES else "Signature"
             else:
+                detected_by = "ML"
                 attack_type = str(row.get("attack_class", "Unknown"))
                 if attack_type in ("0", "BENIGN", "nan", ""):
                     # anomaly_detected is Layer 3's own IsolationForest.predict()
@@ -879,6 +901,7 @@ class SentinelIPS:
                     # and so never actually caught an anomalous flow.
                     if bool(row.get("anomaly_detected", False)):
                         attack_type = "ZeroDay"
+                        detected_by = "Anomaly"
                     else:
                         attack_type = "Unknown"
 
@@ -893,6 +916,7 @@ class SentinelIPS:
                 "severity":    self._severity_for(attack_type),
                 "timestamp":   time.time(),
                 "flow_bytes":  float(row.get("flow_bytes_per_s", 0)),
+                "detected_by": detected_by,
             }
             if attack_type in ("CSRF", "Session Hijacking"):
                 # The response layer needs this to invalidate the affected
@@ -1114,6 +1138,7 @@ class SentinelIPS:
             "severity":    self._severity_for("Honeypot"),
             "timestamp":   time.time(),
             "flow_bytes":  0.0,
+            "detected_by": "Honeypot",
         }
         self._n_attacks += 1
         event = self._run_intel(event)

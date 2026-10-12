@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Ring buffer capacities
 _MAX_EVENTS     = 500     # keep last N detection events
+_MAX_ANOMALY_POINTS = 400  # rolling window of per-flow anomaly scores
 _MAX_THROUGHPUT = 120     # keep last N throughput samples (2 min @ 1 Hz)
 
 # Severity display colours (CSS hex — consumed by Streamlit markdown)
@@ -93,6 +94,8 @@ class DetectionEvent:
             "dst_port":       self.extra.get("dst_port", 0),
             "blocked":        bool(self.extra.get("blocked", False)),
             "actions":        list(self.extra.get("response", [])),
+            # Which layer caught it: ML | Signature | Rule | Anomaly | Honeypot
+            "detected_by":    self.extra.get("detected_by", ""),
         }
 
 
@@ -115,6 +118,12 @@ class LiveMonitor:
         self._throughput: deque[ThroughputSample] = deque(maxlen=_MAX_THROUGHPUT)
         self._total_flows       = 0
         self._total_attacks     = 0
+        # Layer 3 (anomaly) live telemetry for the dashboard score strip.
+        self._anom_scores: deque = deque(maxlen=_MAX_ANOMALY_POINTS)   # (idx, score)
+        self._anom_idx          = 0
+        self._anom_total        = 0
+        self._anom_flagged      = 0
+        self._anom_state        = {"fitted": False, "buffered": 0, "needed": 100}
         self._session_start     = time.monotonic()
         logger.info("LiveMonitor initialised (event_cap=%d, tput_cap=%d)",
                     _MAX_EVENTS, _MAX_THROUGHPUT)
@@ -149,6 +158,24 @@ class LiveMonitor:
             self._total_attacks += 1
             det.seq = self._total_attacks
             self._events.append(det)
+
+    def record_anomaly(self, sample: list, n_total: int, n_flagged: int) -> None:
+        """
+        Record one chunk's Layer 3 output: a bounded sample of per-flow anomaly
+        scores (decision_function; below 0 = anomaly) plus the chunk's exact
+        flow and flagged counts.
+        """
+        with self._lock:
+            for score in sample:
+                self._anom_idx += 1
+                self._anom_scores.append((self._anom_idx, round(float(score), 4)))
+            self._anom_total   += int(n_total)
+            self._anom_flagged += int(n_flagged)
+
+    def set_anomaly_state(self, fitted: bool, buffered: int, needed: int = 100) -> None:
+        """Layer 3 baseline status: still learning 'normal' (buffered/needed) or fitted."""
+        with self._lock:
+            self._anom_state = {"fitted": bool(fitted), "buffered": int(buffered), "needed": int(needed)}
 
     def record_throughput(self, fps: float) -> None:
         """Record a flows-per-second sample from the ingestion layer."""
@@ -186,6 +213,12 @@ class LiveMonitor:
             total_f     = self._total_flows
             total_a     = self._total_attacks
             uptime      = round(time.monotonic() - self._session_start, 1)
+            anomaly     = {
+                "scores":  [[i, s] for i, s in self._anom_scores],
+                "total":   self._anom_total,
+                "flagged": self._anom_flagged,
+                **self._anom_state,
+            }
 
         events_snap.reverse()          # newest first for the table
 
@@ -206,6 +239,7 @@ class LiveMonitor:
             "attack_counts":   attack_counts,
             "severity_counts": severity_counts,
             "uptime_s":        uptime,
+            "anomaly":         anomaly,
         }
 
     def attack_type_counts(self, last_n: int = _MAX_EVENTS) -> dict[str, int]:

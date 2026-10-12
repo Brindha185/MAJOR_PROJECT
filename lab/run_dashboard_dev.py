@@ -37,7 +37,11 @@ _SAMPLE_ATTACKS = [
     ("Honeypot",     "CRITICAL", "Initial Access", "T1110",     2222, ["ip_block", "log_pcap", "alert_critical"], True),
     ("Bot",          "HIGH",     "Persistence",    "T1543",     80,   ["ip_block", "c2_domain_block", "alert_high"], True),
     ("Exfiltration", "MEDIUM",   "Exfiltration",   "T1041",     80,   ["log"], False),
+    ("ZeroDay",      "CRITICAL", "Multiple",       "T1203",     4500, ["quarantine", "alert_critical", "capture_all"], False),
 ]
+# Which detection layer catches each demo attack (shown in the pipeline view).
+_DETECTED_BY = {"PortScan": "ML", "SQLInjection": "Signature", "XSS": "Signature", "WebShell": "Signature",
+                "DDoS": "Rule", "Bot": "Rule", "Exfiltration": "Rule", "Honeypot": "Honeypot", "ZeroDay": "Anomaly"}
 # Hotspot-style private attackers, matching the exhibition setup.
 _ATTACKER_IPS = ["192.168.43.21", "192.168.43.22", "192.168.43.23"]
 
@@ -50,6 +54,11 @@ def main() -> None:
 
     rng = random.Random()
     try:
+        # Layer 3 learns "normal" from the first flows before it can score anything.
+        for buffered in range(0, 101, 20):
+            monitor.set_anomaly_state(False, buffered, 100)
+            time.sleep(1)
+        monitor.set_anomaly_state(True, 100, 100)
         while True:
             atk, sev, tactic, tech, port, actions, blocks = rng.choice(_SAMPLE_ATTACKS)
             ip = rng.choice(_ATTACKER_IPS)
@@ -60,12 +69,22 @@ def main() -> None:
                 "risk_score": round(rng.uniform(30, 98), 1),
                 "action": ", ".join(actions[:2]), "response": actions, "blocked": blocks,
                 "actor_class": "ScriptKiddie", "sophistication": 30.0,
+                "detected_by": _DETECTED_BY.get(atk, "ML"),
                 "lat": 0.0, "lon": 0.0, "country": "Unknown", "country_code": "", "city": "",
             }
             monitor.push_event(event)
             amap.ingest(event)
             monitor.record_throughput(rng.uniform(800_000, 1_700_000))
-            time.sleep(3)
+            # Three one-second ticks of live anomaly scores per attack event; a ZeroDay
+            # makes a few of them dip below the 0 threshold.
+            for tick in range(3):
+                scores = [rng.gauss(0.14, 0.035) for _ in range(24)]
+                dips = 0
+                if atk == "ZeroDay" and tick == 1:
+                    scores[8:12] = [rng.uniform(-0.27, -0.07) for _ in range(4)]
+                    dips = 4
+                monitor.record_anomaly(scores, n_total=len(scores) * 40, n_flagged=dips)
+                time.sleep(1)
     except KeyboardInterrupt:
         print("\nStopped.")
 

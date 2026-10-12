@@ -33,6 +33,7 @@ const feed = (await load('/src/mx/FeedCards.jsx')).default
 const dia = (await load('/src/mx/AttackDiagram.jsx')).default
 const det = (await load('/src/mx/DetailsPage.jsx')).default
 const mit = (await load('/src/mx/MitrePage.jsx')).default
+const anom = (await load('/src/mx/AnomalyPage.jsx')).default
 const app = (await load('/src/App.jsx')).default
 
 t('TopBar live', () => renderToString(h(shell.TopBar, { page: 'live', setPage() {}, info: { enforce: false, server_ip: '1.2.3.4', mode: 'replay' } })))
@@ -50,6 +51,13 @@ t('Details', () => renderToString(h(det, { events, attackers, attackCounts: coun
 t('Details empty', () => renderToString(h(det, { events: [], attackers: [], attackCounts: undefined })))
 t('Mitre', () => renderToString(h(mit, { events, attackCounts: counts })))
 t('Mitre empty', () => renderToString(h(mit, { events: [], attackCounts: undefined })))
+const ev2 = events.map((e, i) => ({ ...e, detected_by: ['ML', 'Signature', 'Rule', 'Anomaly', 'Honeypot'][i % 5] }))
+const an = { scores: [[1, 0.12], [2, -0.2]], total: 900, flagged: 1, fitted: true, buffered: 100, needed: 100 }
+t('Anomaly page', () => renderToString(h(anom, { events: ev2, anomaly: an })))
+t('Anomaly page learning', () => renderToString(h(anom, { events: [], anomaly: { scores: [], total: 0, flagged: 0, fitted: false, buffered: 40, needed: 100 } })))
+t('Anomaly page no data', () => renderToString(h(anom, { events: [], anomaly: undefined })))
+t('Feed with detected_by', () => renderToString(h(feed, { events: ev2 })))
+t('Details with detected_by', () => renderToString(h(det, { events: ev2, attackers, attackCounts: counts })))
 t('App (no data)', () => renderToString(h(app)))
 await server.close()
 console.log(fails ? `${fails} FAILED` : 'ALL OK')

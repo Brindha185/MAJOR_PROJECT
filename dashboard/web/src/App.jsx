@@ -7,6 +7,7 @@ import AttackDiagram from './mx/AttackDiagram.jsx'
 import FeedCards from './mx/FeedCards.jsx'
 import DetailsPage from './mx/DetailsPage.jsx'
 import MitrePage from './mx/MitrePage.jsx'
+import AnomalyPage from './mx/AnomalyPage.jsx'
 
 // A detection within this many seconds keeps the banner in UNDER ATTACK.
 const ATTACK_WINDOW_S = 8
@@ -32,7 +33,12 @@ function groupAttackers(events) {
 export default function App() {
   const [connected, setConnected] = useState(false)
   const [data, setData] = useState(null)
-  const [page, setPage] = useState('live')
+  // Tab is kept in the URL hash (#live, #details, #anomaly, #mitre) so a tab can be linked/reloaded.
+  const [page, setPageState] = useState(() => {
+    const h = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '')
+    return ['live', 'details', 'anomaly', 'mitre'].includes(h) ? h : 'live'
+  })
+  const setPage = (p) => { window.location.hash = p; setPageState(p) }
   const [flash, setFlash] = useState(false)
 
   useEffect(() => {
@@ -73,7 +79,7 @@ export default function App() {
       <div className="wrap">
         {!connected && <div className="reconnect">Reconnecting to dashboard server…</div>}
         <StatusBanner latest={latest} underAttack={underAttack} enforce={!!info?.enforce} />
-        <KpiCards monitor={monitor} blockedCount={blockedCount} topSeverity={topSeverity} />
+        {page !== 'anomaly' && <KpiCards monitor={monitor} blockedCount={blockedCount} topSeverity={topSeverity} />}
 
         <div className={`page ${page === 'live' ? 'on' : ''}`}>
           <div className="hero">
@@ -84,6 +90,9 @@ export default function App() {
         </div>
         <div className={`page ${page === 'details' ? 'on' : ''}`}>
           <DetailsPage events={events} attackers={attackers} attackCounts={monitor?.attack_counts} />
+        </div>
+        <div className={`page ${page === 'anomaly' ? 'on' : ''}`}>
+          <AnomalyPage events={events} anomaly={monitor?.anomaly} />
         </div>
         <div className={`page ${page === 'mitre' ? 'on' : ''}`}>
           <MitrePage events={events} attackCounts={monitor?.attack_counts} />

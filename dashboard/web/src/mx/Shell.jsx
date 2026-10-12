@@ -1,7 +1,7 @@
 import { SEV_COLOR, SEV_ORDER } from '../attackInfo.js'
 
 export function TopBar({ page, setPage, info }) {
-  const tabs = [['live', 'Live Attack Map'], ['details', 'Attack Details'], ['mitre', 'MITRE & Response']]
+  const tabs = [['live', 'Live Attack Map'], ['details', 'Attack Details'], ['anomaly', 'Anomaly Detection'], ['mitre', 'MITRE & Response']]
   const enforce = !!info?.enforce
   const mode = info?.mode === 'replay' ? 'REPLAY' : info?.mode === 'demo' ? 'DEMO DATA' : 'LIVE'
   return (
@@ -28,7 +28,7 @@ export function TopBar({ page, setPage, info }) {
         <span className={`badge ${enforce ? 'good' : 'warn'}`}>
           OS-level blocking: <b>{enforce ? 'ON' : 'OFF'}</b>
         </span>
-        {info?.server_ip && <span className="badge">Server {info.server_ip}</span>}
+        {info?.server_ip && <span className="badge srv">Server {info.server_ip}</span>}
       </div>
     </header>
   )
