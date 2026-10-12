@@ -1009,6 +1009,7 @@ class SentinelIPS:
 
         actions = RESPONSE_MATRIX.get(attack, ["log"])
         event["action"] = ", ".join(actions[:2])
+        event["response"] = list(actions)
 
         # Rate limiting always applied first
         try:
@@ -1052,6 +1053,7 @@ class SentinelIPS:
                 self._blacklist.block(src_ip, duration_s=duration,
                                       reason=f"{attack} ({severity})")
                 blocked = True
+                event["blocked"] = True
             except Exception as exc:
                 logger.debug("Block failed: %s", exc)
 
@@ -1067,6 +1069,7 @@ class SentinelIPS:
                 try:
                     self._blacklist.block(src_ip, duration_s=_BLOCK_ACTION_DURATIONS[block_action],
                                           reason=f"{attack} ({severity})")
+                    event["blocked"] = True
                 except Exception as exc:
                     logger.debug("Block failed: %s", exc)
 
@@ -1364,7 +1367,11 @@ def _run_live(args) -> None:
         enforce_blocks=args.enforce_blocks,
     )
 
-    dashboard_handle = start_dashboard_server(ips.monitor, ips.attack_map)
+    dashboard_handle = start_dashboard_server(
+        ips.monitor, ips.attack_map,
+        info={"enforce": bool(args.enforce_blocks), "server_ip": ips._own_ip or "",
+              "mode": "replay" if getattr(args, "pcap", None) else "live"},
+    )
     logger.info("Live dashboard: http://localhost:%d", dashboard_handle.port)
 
     interface  = args.interface or LIVE_INTERFACE_DEFAULT

@@ -1,18 +1,39 @@
-import { useEffect, useState } from 'react'
+import './modern.css'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
-import KpiRow from './components/KpiRow.jsx'
-import SystemHealth from './components/SystemHealth.jsx'
-import ThroughputChart from './components/ThroughputChart.jsx'
-import AlertTable from './components/AlertTable.jsx'
-import AttackBarChart from './components/AttackBarChart.jsx'
-import SeverityPie from './components/SeverityPie.jsx'
-import WorldMap from './components/WorldMap.jsx'
-import Choropleth from './components/Choropleth.jsx'
-import MitreHeatmap from './components/MitreHeatmap.jsx'
+import { infoFor } from './attackInfo.js'
+import { KpiCards, StatusBanner, TopBar, topSeverityOf } from './mx/Shell.jsx'
+import AttackDiagram from './mx/AttackDiagram.jsx'
+import FeedCards from './mx/FeedCards.jsx'
+import DetailsPage from './mx/DetailsPage.jsx'
+import MitrePage from './mx/MitrePage.jsx'
+
+// A detection within this many seconds keeps the banner in UNDER ATTACK.
+const ATTACK_WINDOW_S = 8
+
+// One entry per distinct source IP, most recently active first.
+function groupAttackers(events) {
+  const map = new Map()
+  for (const e of events) {                       // events arrive newest first
+    let a = map.get(e.src_ip)
+    if (!a) {
+      a = { ip: e.src_ip, count: 0, types: [], blocked: false, severity: e.severity,
+        lastAge: e.age_s, firstTime: e.time, actorClass: e.actor_class }
+      map.set(e.src_ip, a)
+    }
+    a.count += 1
+    if (!a.types.includes(e.attack)) a.types.push(e.attack)
+    a.blocked = a.blocked || e.blocked
+    a.firstTime = e.time                          // ends as the oldest event's time
+  }
+  return [...map.values()]
+}
 
 export default function App() {
   const [connected, setConnected] = useState(false)
   const [data, setData] = useState(null)
+  const [page, setPage] = useState('live')
+  const [flash, setFlash] = useState(false)
 
   useEffect(() => {
     const socket = io()
@@ -23,31 +44,51 @@ export default function App() {
   }, [])
 
   const monitor = data?.monitor ?? null
-  const figures = data?.figures ?? {}
+  const events = useMemo(() => monitor?.events_list ?? [], [monitor])
+  const attackers = useMemo(() => groupAttackers(events), [events])
+  const info = data?.server_info
+
+  const latest = events.length ? { ...events[0], label: infoFor(events[0].attack).label } : null
+  const underAttack = !!latest && latest.age_s < ATTACK_WINDOW_S && latest.severity !== 'INFO'
+  const blockedCount = attackers.filter((a) => a.blocked).length
+  const topSeverity = events.length ? topSeverityOf(events) : ''
+
+  // Red screen-edge glow whenever a new detection lands (not on first load).
+  const seenId = useRef(null)
+  const latestId = latest?.id
+  useEffect(() => {
+    if (latestId === undefined) return undefined
+    if (seenId.current === null) { seenId.current = latestId; return undefined }
+    if (latestId === seenId.current) return undefined
+    seenId.current = latestId
+    setFlash(true)
+    const t = setTimeout(() => setFlash(false), 1100)
+    return () => clearTimeout(t)
+  }, [latestId])
 
   return (
-    <div className="app">
-      <h1 className="header">SENTINEL IPS v2.0</h1>
-      <p className="subheader">Real-Time Security Operations Centre</p>
+    <>
+      <div className={`vig ${flash ? 'on' : ''}`} />
+      <TopBar page={page} setPage={setPage} info={info} />
+      <div className="wrap">
+        {!connected && <div className="reconnect">Reconnecting to dashboard server…</div>}
+        <StatusBanner latest={latest} underAttack={underAttack} enforce={!!info?.enforce} />
+        <KpiCards monitor={monitor} blockedCount={blockedCount} topSeverity={topSeverity} />
 
-      {!connected && <div className="banner-reconnecting">Reconnecting to dashboard server…</div>}
-
-      <KpiRow monitor={monitor} uniqueIps={data?.unique_ips} />
-
-      <div className="grid-2">
-        <ThroughputChart series={monitor?.throughput_fps ?? []} />
-        <AlertTable events={monitor?.events_list ?? []} />
+        <div className={`page ${page === 'live' ? 'on' : ''}`}>
+          <div className="hero">
+            <div className="panel"><h3>Attackers → Protected server</h3>
+              <AttackDiagram attackers={attackers} events={events} /></div>
+            <div className="panel"><h3>Live attack feed</h3><FeedCards events={events} /></div>
+          </div>
+        </div>
+        <div className={`page ${page === 'details' ? 'on' : ''}`}>
+          <DetailsPage events={events} attackers={attackers} attackCounts={monitor?.attack_counts} />
+        </div>
+        <div className={`page ${page === 'mitre' ? 'on' : ''}`}>
+          <MitrePage events={events} attackCounts={monitor?.attack_counts} />
+        </div>
       </div>
-
-      <div className="grid-2">
-        <AttackBarChart figure={figures.attack_bar} />
-        <SeverityPie figure={figures.severity_pie} />
-      </div>
-
-      <WorldMap figure={figures.world_map} />
-      <Choropleth figure={figures.choropleth} />
-      <MitreHeatmap figure={figures.mitre_heatmap} />
-      <SystemHealth health={data?.health} />
-    </div>
+    </>
   )
 }

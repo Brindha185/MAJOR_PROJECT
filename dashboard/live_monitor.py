@@ -60,6 +60,7 @@ class DetectionEvent:
     risk_score:  float
     action:      str
     extra:       dict = field(default_factory=dict)
+    seq:         int = 0   # monotonically increasing id, lets the UI tell new events from old
 
     @property
     def age_s(self) -> float:
@@ -83,6 +84,15 @@ class DetectionEvent:
             # dashboard never showed them despite the data existing.
             "actor_class":    self.extra.get("actor_class", "Unknown"),
             "sophistication": self.extra.get("sophistication", 0),
+            # Fields the three-page UI needs (2026-10-12): stable id, age for
+            # the SECURE/UNDER ATTACK banner, MITRE technique, target port,
+            # and whether SENTINEL's blacklist actually issued a block.
+            "id":             self.seq,
+            "age_s":          self.age_s,
+            "technique":      self.extra.get("mitre_technique", ""),
+            "dst_port":       self.extra.get("dst_port", 0),
+            "blocked":        bool(self.extra.get("blocked", False)),
+            "actions":        list(self.extra.get("response", [])),
         }
 
 
@@ -136,8 +146,9 @@ class LiveMonitor:
                                 "severity", "mitre_tactic", "risk_score", "action")},
         )
         with self._lock:
-            self._events.append(det)
             self._total_attacks += 1
+            det.seq = self._total_attacks
+            self._events.append(det)
 
     def record_throughput(self, fps: float) -> None:
         """Record a flows-per-second sample from the ingestion layer."""

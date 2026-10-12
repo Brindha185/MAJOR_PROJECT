@@ -29,6 +29,7 @@ Usage:
 import json
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -46,6 +47,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 _WEB_DIST = _ROOT / "dashboard" / "web" / "dist"
 
 _TICK_S_DEFAULT = 2.0
+_INSTANT_EMIT_MIN_GAP_S = 0.25
+# Shown in the UI header (enforcement badge, server IP). Set by
+# start_dashboard_server(); empty until then so import has no side effects.
+_SERVER_INFO: dict = {}
 
 # Neumorphic theme tokens -- must match dashboard/web/src/theme.css exactly.
 NEU_BASE = "#1B2130"
@@ -234,6 +239,7 @@ def build_snapshot_payload(monitor: LiveMonitor, amap: AttackMap) -> dict:
     """
     snap = monitor.snapshot()
     return {
+        "server_info": dict(_SERVER_INFO),
         "monitor": snap,
         "top_countries": amap.top_countries(10),
         "unique_ips": amap.total_unique_ips(),
@@ -272,9 +278,17 @@ def _install_instant_emit(monitor: LiveMonitor, amap: AttackMap, socketio: Socke
     dashboard/live_monitor.py itself is never modified.
     """
     original_push_event = monitor.push_event
+    last_emit = [0.0]
 
     def _push_and_emit(event: dict) -> None:
         original_push_event(event)
+        # Throttle: each emit serialises 5 Plotly figures + the full event
+        # list, so a flood pushing hundreds of events/sec would otherwise
+        # choke the socket. The periodic emitter still delivers every event.
+        now = time.monotonic()
+        if now - last_emit[0] < _INSTANT_EMIT_MIN_GAP_S:
+            return
+        last_emit[0] = now
         try:
             socketio.emit("dashboard_update", build_snapshot_payload(monitor, amap))
         except Exception:
@@ -306,12 +320,15 @@ def start_dashboard_server(
     host: str = "0.0.0.0",
     port: int = 5000,
     tick_s: float = _TICK_S_DEFAULT,
+    info: Optional[dict] = None,
 ) -> DashboardServerHandle:
     """
     Start the embedded dashboard server as two daemon background threads
     (HTTP/Socket.IO server, and the periodic snapshot emitter) and return
     immediately -- does not block the caller's own loop.
     """
+    _SERVER_INFO.clear()
+    _SERVER_INFO.update(info or {})
     app = _create_app()
     socketio = SocketIO(app, cors_allowed_origins="*")
     stop_event = threading.Event()
