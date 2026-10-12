@@ -77,8 +77,8 @@ export default function App() {
 
         <div className={`page ${page === 'live' ? 'on' : ''}`}>
           <div className="hero">
-            <div className="panel"><h3>Attackers → Protected server</h3>
-              <AttackDiagram attackers={attackers} events={events} /></div>
+            <div className="panel"><h3>Server Map</h3>
+              <AttackDiagram attackers={attackers} events={events} underAttack={underAttack} /></div>
             <div className="panel"><h3>Live attack feed</h3><FeedCards events={events} /></div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { infoFor, responseText, techniqueOf } from '../attackInfo.js'
+import { LaptopMini } from './Icons.jsx'
 
 const Sev = ({ s }) => <span className="chip" style={{ '--c': `var(--${{ CRITICAL: 'crit', HIGH: 'high', MEDIUM: 'med', LOW: 'low', INFO: 'info' }[s] || 'info'})` }}>{s}</span>
 
@@ -10,7 +11,7 @@ function AttackerCards({ attackers }) {
       {attackers.map((a) => (
         <div className="acard" key={a.ip}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span className="ip mono">💻 {a.ip}</span>
+            <span className="ip mono"><LaptopMini size={30} />{a.ip}</span>
             {a.blocked ? <span className="chip grey">BLOCKED</span> : <span className="chip sevHIGH">ACTIVE</span>}
           </div>
           <div className="row"><span>{a.count} attacks</span><span>since {a.firstTime}</span></div>
@@ -40,7 +41,7 @@ function Drawer({ ev, onClose }) {
           <div className="sec"><h4>MITRE ATT&amp;CK</h4>{info.tactic} → <b>{techniqueOf(ev) || '—'}</b> {info.techName}</div>
           <div className="sec"><h4>Attacker profile</h4>{ev.actor_class} · sophistication {Math.round(ev.sophistication)}/100 · risk {ev.risk}</div>
           <div className="sec"><h4>SENTINEL response</h4>
-            {ev.blocked ? '🛡 Source IP blocked (SENTINEL blacklist)' : '→ Not blocked'}<br />
+            {ev.blocked ? '✓ Source IP blocked (SENTINEL blacklist)' : '→ Not blocked'}<br />
             {responseText(ev)}
           </div>
         </>
@@ -84,7 +85,7 @@ export default function DetailsPage({ events, attackers, attackCounts }) {
                 <td>{e.confidence}</td>
                 <td><Sev s={e.severity} /></td>
                 <td style={{ color: '#c9d3e6' }}>{responseText(e)}</td>
-                <td>{e.blocked ? <span className="chip" style={{ '--c': '#3ddc97' }}>BLOCKED</span> : <span className="chip grey">—</span>}</td>
+                <td>{e.blocked ? <span className="chip" style={{ '--c': '#9ccf8f' }}>BLOCKED</span> : <span className="chip grey">—</span>}</td>
               </tr>
             ))}
           </tbody>

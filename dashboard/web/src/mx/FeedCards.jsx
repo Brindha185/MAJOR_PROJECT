@@ -1,6 +1,6 @@
 import { infoFor, responseText, techniqueOf } from '../attackInfo.js'
 
-// Newest 4 distinct (source, attack) pairs -- a flood would otherwise fill
+// Newest 5 distinct (source, attack) pairs -- a flood would otherwise fill
 // every card with the same attack.
 export default function FeedCards({ events }) {
   const seen = new Set()
@@ -10,7 +10,7 @@ export default function FeedCards({ events }) {
     if (seen.has(k)) continue
     seen.add(k)
     cards.push(e)
-    if (cards.length === 4) break
+    if (cards.length === 5) break
   }
   if (!cards.length) return <div className="feed"><p className="empty">Waiting for detections…</p></div>
   return (
@@ -26,7 +26,7 @@ export default function FeedCards({ events }) {
               {e.src_ip}{e.dst_port ? ` → :${e.dst_port}` : ''} {tech && <span className="chip mt">{tech}</span>}
             </div>
             <p>{info.desc}</p>
-            <div className="m">{e.blocked ? '🛡 ' : '→ '}<b style={e.blocked ? { color: '#3ddc97' } : undefined}>{responseText(e)}</b></div>
+            <div className="m">{e.blocked ? '✓ ' : '→ '}<b style={e.blocked ? { color: '#9ccf8f' } : undefined}>{responseText(e)}</b></div>
           </div>
         )
       })}

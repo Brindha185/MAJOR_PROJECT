@@ -1,7 +1,12 @@
 // Static knowledge the UI needs per attack type: plain-English description,
 // MITRE mapping, and the automatic response chain (mirrors config.RESPONSE_MATRIX).
+// Warm palette (mirrors the CSS variables in modern.css).
+export const THEME = {
+  accent: '#e3a857', ok: '#9ccf8f', ink: '#f4eadb', dim: '#ad9d89',
+  panel: '#251e18', panel2: '#2f261e', line: '#473a2e', lineIdle: '#5a4a3b',
+}
 export const SEV_COLOR = {
-  CRITICAL: '#ff5c7a', HIGH: '#ffa24d', MEDIUM: '#ffd65c', LOW: '#5ce6a6', INFO: '#6fa8ff',
+  CRITICAL: '#ea5a4f', HIGH: '#f0914a', MEDIUM: '#efc15a', LOW: '#93c98a', INFO: '#c9a27f',
 }
 export const SEV_ORDER = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 export const TACTICS = ['Discovery', 'Initial Access', 'Execution', 'Persistence',

@@ -41,18 +41,18 @@ export function StatusBanner({ latest, underAttack, enforce }) {
 }
 
 const SPARK = [
-  ['#ff5c7a', 'M0 34 C15 30 20 8 35 20 S60 36 75 14 90 6 100 10'],
-  ['#3ddc97', 'M0 36 C20 34 30 24 45 22 S75 14 100 6'],
-  ['#6fa8ff', 'M0 30 C15 10 30 36 45 18 S75 30 100 12'],
+  ['#ea5a4f', 'M0 34 C15 30 20 8 35 20 S60 36 75 14 90 6 100 10'],
+  ['#9ccf8f', 'M0 36 C20 34 30 24 45 22 S75 14 100 6'],
+  ['#e3a857', 'M0 30 C15 10 30 36 45 18 S75 30 100 12'],
 ]
 
 export function KpiCards({ monitor, blockedCount, topSeverity }) {
   const fps = Math.round(monitor?.current_fps ?? 0)
   const cards = [
-    ['Attacks detected', (monitor?.total_attacks ?? 0).toLocaleString(), '#ff5c7a', SPARK[0]],
-    ['Attackers blocked', blockedCount, '#3ddc97', SPARK[1]],
-    ['Flows / sec', fps.toLocaleString(), '#6fa8ff', SPARK[2]],
-    ['Highest severity', topSeverity || '—', SEV_COLOR[topSeverity] || '#8a97b0', null],
+    ['Attacks detected', (monitor?.total_attacks ?? 0).toLocaleString(), '#ea5a4f', SPARK[0]],
+    ['Attackers blocked', blockedCount, '#9ccf8f', SPARK[1]],
+    ['Flows / sec', fps.toLocaleString(), '#e3a857', SPARK[2]],
+    ['Highest severity', topSeverity || '—', SEV_COLOR[topSeverity] || '#ad9d89', null],
   ]
   return (
     <div className="kpis">
