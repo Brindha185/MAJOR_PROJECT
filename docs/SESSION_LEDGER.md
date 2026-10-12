@@ -10,6 +10,29 @@ for the full protocol.
 
 ---
 
+## 2026-10-12 — Exhibition prep: backlog fixes, PCAP-replay fallback, demo preflight, three-page dashboard designed (not built)
+
+**Goal:** Clear the open backlog and get SENTINEL demo-ready for the exhibition (live attacks from two laptops over a phone hotspot, shown to teachers/reviewers), then make the dashboard visually clear enough that reviewers can see which laptop attacks, what the attack is, and what SENTINEL did. Session spanned 2026-10-06 to 2026-10-12; the exhibition is 2026-10-13.
+
+**Changes:**
+- *Code fixes (commit `3412b0c`):* `MistakeCollector` is now fed live (a Layer 2 signature hit that Layer 1 scored benign is recorded as a confirmed FN; heuristic DoS/beacon/exfil overrides deliberately excluded; no live source of confirmed FPs exists). URL reconstruction for Layer 2 uses the request's Host header instead of numeric `dst_ip` — a public-IP server would otherwise flag every inbound HTTP request as Phishing `raw_ip_host` (hidden in the lab only because lab IPs are private). Self-traffic filter now also drops reverse-direction reply flows (remote well-known port -> own ephemeral port). `_local_ips()` cached 30 s (was ~70% of per-event response time under flood). Stale `verify_multiclass_portscan_fix.py` rescored on attack flows only (0.99; PortScan recall 1.0). New `lab/verify_mistake_collection.py`; all 21 verify scripts + `sentinel.py health` (33/33) green.
+- *Demo tooling (commit `c3b56ae`):* `sentinel.py live --pcap <file> [--replay-speed N] [--loop]` replays a recorded session through the full live pipeline and dashboard with no network/admin needed (verified on `pcap/sentinel_20260825_102545_52170578.pcap`). `lab/preflight.py [--enforce-blocks]` checks admin shell, models, dashboard build, capture interface, ports, firewall profiles, own IP. Layer 2 now skips payloads containing C0 control characters (nmap probe bytes that decode as valid UTF-8 were flagged SQLInjection/CommandInject). `docs/DEMO_RUNBOOK.md` updated with preflight + replay fallback.
+- *Dashboard redesign — design only (spec commit `d03bda7`):* `docs/superpowers/specs/2026-10-07-three-page-dashboard-design.md`. Three pages: (1) Live Attack Map — attacker laptops (labelled by IP) -> protected server, animated packets, BLOCKED markers, feed cards; (2) Attack Details — per-attacker cards, searchable table, click-through incident drawer; (3) MITRE & Response — ATT&CK tactic matrix + countermeasure table from `RESPONSE_MATRIX`. Shell: flat dark theme, status banner (SECURE / UNDER ATTACK), KPI cards, enforcement ON/OFF badge. Backend change is small (event row gains technique, technique name, dst_port, blocked, response, ts; `_run_response` sets `blocked`; server payload gains `server_info`). Interactive HTML mockups (v1 and a livelier v2 with comet packets, impact ripples, shield-strike on block, red vignette) live in `.superpowers/brainstorm/` (now gitignored). **No React code written yet.**
+
+**Decisions:**
+- Chose layout "A — Command center" over radar / story timeline / MITRE-matrix-only; borrowed the story-card BLOCKED stamp and a MITRE strip. Reviewers do not attack anything; the presenter attacks from other laptops on a phone hotspot. Laptops shown by IP only (user declined click-to-rename). World map demoted — hotspot attackers all have private IPs, so there is nothing to plot.
+- Defaults I set (user never answered): large fonts/high contrast for a projector; no sound.
+- "BLOCKED" must be honest: it means SENTINEL's blacklist issued the block; the enforcement badge states whether the OS firewall actually enforces it.
+- Exhibition is tomorrow, so the three-page build is **frozen** (unbuilt, not visually testable from this environment, too risky overnight). Tonight's scope: a minimal banner/BLOCKED/enforcement-badge upgrade to the existing dashboard (optional), full rehearsal with both attacker laptops, PCAP replay as fallback.
+- Firewall: user delegated the call ("no hiccups on mobile hotspot"); chose to **keep `--enforce-blocks` off** for the demo (zero firewall risk) rather than enabling the Public profile.
+
+**Next steps:**
+- Tonight: run all attacks once with both laptops on the hotspot using `docs/DEMO_RUNBOOK.md`; run `python lab/preflight.py` first (it will report firewall profiles OFF and, if non-admin, an elevation failure — both expected/acceptable with enforcement off).
+- After the exhibition: get the spec reviewed, write the plan, build the three-page dashboard (and revisit real OS-level enforcement: Windows Private/Public profiles are OFF, so `--enforce-blocks` currently creates rules that enforce nothing).
+- Still open: flood-backlog root cause unmeasured (likely per-packet flow assembly in the sniffer thread, not the response path); PostgreSQL holds port 5432 so the `fake_db` honeypot decoy can't bind; ~40+ empty 24-byte PCAPs in `pcap/` created by verify runs (deletion was denied this session, left for the user); `threat_intel/*` and the synopsis/proposal .docx files are still uncommitted; local commits `3412b0c`, `c3b56ae`, `d03bda7` are not pushed yet.
+
+---
+
 ## 2026-08-04 — Fixed GitHub contribution-graph identity; revised the IEEE paper end-to-end
 
 **Goal:** Diagnose why ~200 pushed commits weren't showing as GitHub
