@@ -78,7 +78,7 @@ def main() -> None:
             # Three one-second ticks of live anomaly scores per attack event; a ZeroDay
             # makes a few of them dip below the 0 threshold.
             for tick in range(3):
-                scores = [rng.gauss(0.14, 0.035) for _ in range(24)]
+                scores = [rng.gauss(0.14, 0.022) for _ in range(24)]
                 dips = 0
                 if atk == "ZeroDay" and tick == 1:
                     scores[8:12] = [rng.uniform(-0.27, -0.07) for _ in range(4)]

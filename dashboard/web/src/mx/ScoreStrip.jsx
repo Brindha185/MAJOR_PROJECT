@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { THEME } from '../attackInfo.js'
 
-const N = 150            // points visible on the strip
+const N = 140            // points visible on the strip (~20 s of history at PACE_MS)
+const PACE_MS = 140      // one new point every 140 ms (~7/s): calm enough to read
+const MAX_QUEUE = 25     // ~3.5 s of lag at most; beyond this, thin out ordinary points so the strip never lags far behind
 const LO = -0.3
 const HI = 0.3
 const RED = '#f04848'
@@ -28,7 +30,15 @@ export default function ScoreStrip({ anomaly }) {
     const pts = fresh.map(([idx, score]) => ({ idx, score }))
     if (buf.current.length === 0) buf.current = pts.slice(-N)       // first load: show immediately
     else queue.current.push(...pts)
-    if (queue.current.length > 600) queue.current = queue.current.slice(-600)
+    if (queue.current.length > MAX_QUEUE) {
+      // Keep every outlier; thin the ordinary points evenly so the strip stays near real time.
+      const q = queue.current
+      const normal = q.filter((p) => p.score >= 0)
+      const keepNormal = Math.max(10, MAX_QUEUE - q.filter((p) => p.score < 0).length)
+      const step = Math.max(1, Math.ceil(normal.length / keepNormal))
+      const kept = new Set(normal.filter((_, i) => i % step === 0))
+      queue.current = q.filter((p) => p.score < 0 || kept.has(p))
+    }
   }, [anomaly])
 
   useEffect(() => {
@@ -37,7 +47,7 @@ export default function ScoreStrip({ anomaly }) {
     const ctx = canvas.getContext('2d')
     let raf = 0
     let lastRelease = performance.now()
-    let interval = 100
+    const interval = PACE_MS
 
     // The canvas is created while its tab may be hidden (display:none => 0x0), so
     // re-fit the backing store to the real on-screen size on every frame instead of
@@ -64,9 +74,8 @@ export default function ScoreStrip({ anomaly }) {
         buf.current.push(queue.current.shift())
         if (buf.current.length > N) buf.current.shift()
         lastRelease = now
-        interval = clamp(1800 / Math.max(queue.current.length, 1), 12, 140)
       }
-      const t = queue.current.length || now - lastRelease < interval ? clamp((now - lastRelease) / interval, 0, 1) : 1
+      const t = clamp((now - lastRelease) / interval, 0, 1)
       const dx = W / (N - 1)
       const y = (v) => H - ((clamp(v, LO, HI) - LO) / (HI - LO)) * H
 
@@ -100,10 +109,23 @@ export default function ScoreStrip({ anomaly }) {
         ctx.lineWidth = 3
         ctx.lineJoin = 'round'
         ctx.lineCap = 'round'
-        for (let k = 1; k < pts.length; k++) {
-          ctx.strokeStyle = pts[k].score < 0 || pts[k - 1].score < 0 ? RED : THEME.accent
-          ctx.beginPath(); ctx.moveTo(x(k - 1), y(pts[k - 1].score)); ctx.lineTo(x(k), y(pts[k].score)); ctx.stroke()
+        // One smooth curve (quadratic through segment midpoints), drawn twice and clipped
+        // at the threshold: sand above it, red below it, switching exactly where it crosses.
+        const path = () => {
+          ctx.beginPath()
+          ctx.moveTo(x(0), y(pts[0].score))
+          for (let k = 1; k < pts.length - 1; k++) {
+            const mx = (x(k) + x(k + 1)) / 2
+            const my = (y(pts[k].score) + y(pts[k + 1].score)) / 2
+            ctx.quadraticCurveTo(x(k), y(pts[k].score), mx, my)
+          }
+          ctx.lineTo(x(pts.length - 1), y(pts[pts.length - 1].score))
         }
+        const yt = y(0)
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, yt); ctx.clip()
+        ctx.strokeStyle = THEME.accent; path(); ctx.stroke(); ctx.restore()
+        ctx.save(); ctx.beginPath(); ctx.rect(0, yt, W, H - yt); ctx.clip()
+        ctx.strokeStyle = RED; path(); ctx.stroke(); ctx.restore()
         const pulse = 12 + Math.sin(now / 150) * 3
         for (let k = 0; k < pts.length; k++) {
           if (pts[k].score >= 0) continue
