@@ -35,6 +35,7 @@ import socket
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import List, Optional
 
@@ -159,7 +160,13 @@ _BLOCK_ACTION_DURATIONS = {
 _REQUEST_LINE_RE = re.compile(r"^(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(\S+)\s+HTTP/")
 
 _BINARY_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")   # C0 controls except \t \n \r
-_RULE_TYPES = frozenset({"Bot", "DoS", "DDoS", "Exfiltration"})   # statistical rule overrides, not payload signatures
+_RULE_TYPES = frozenset({"Bot", "DoS", "DDoS", "Exfiltration", "BruteForce"})   # statistical rule overrides, not payload signatures
+# Brute force: many requests to a login/auth endpoint from one source in a short time
+# (what fail2ban does). The ML models do not recognise this reliably on live traffic.
+_BRUTE_WINDOW_S = 60.0
+_BRUTE_MIN_ATTEMPTS = 8
+_AUTH_ATTEMPT_RE = (r"(?i)^(?:GET|POST|PUT)\s+/(?:[\w./-]*/)?(?:login|signin|sign-in|log-in|wp-login\.php|"
+                    r"auth|authenticate)(?:[/?\s]|$)|user-agent:[^\r\n]*(?:hydra|medusa|patator|ncrack)")
 _ANOMALY_SAMPLE_PER_CHUNK = 30   # scores sent to the dashboard per chunk (plus every flagged flow, capped)
 _HOST_HEADER_RE =re.compile(r"^Host:\s*([^\s:]+)", re.MULTILINE | re.IGNORECASE)
 _EPHEMERAL_PORT_MIN = 49152   # IANA dynamic range (Windows client ports)
@@ -292,6 +299,7 @@ class SentinelIPS:
                             "exclusion disabled: %s", exc)
 
         # --- Internal counters ---
+        self._auth_hits: dict = {}   # src_ip -> deque of monotonic times of login-endpoint requests
         self._n_flows         = 0
         self._n_attacks       = 0
         self._n_explained     = 0
@@ -360,6 +368,9 @@ class SentinelIPS:
 
         # --- DoS/DDoS detection on cross-flow connection rate ---
         chunk = self._run_dos(chunk)
+
+        # --- Brute force: repeated login-endpoint requests from one source ---
+        chunk = self._run_bruteforce(chunk)
 
         # --- Exfiltration detection on single-flow byte volume ---
         chunk = self._run_exfil(chunk)
@@ -749,6 +760,51 @@ class SentinelIPS:
                 chunk.loc[newly_labelled, "confidence"].clip(lower=0.75)
         else:
             chunk.loc[newly_labelled, "confidence"] = 0.75
+        return chunk
+
+    def _run_bruteforce(self, chunk: pd.DataFrame) -> pd.DataFrame:
+        """
+        Rule-based brute-force detection: _BRUTE_MIN_ATTEMPTS or more requests to a
+        login/auth endpoint (or from a known brute-force tool's User-Agent) from one
+        source within _BRUTE_WINDOW_S. Counted across chunks with a per-source window.
+        Lower confidence (0.75) than an exact signature, like the other rate rules, and
+        never overrides a more specific label already set on the flow.
+        """
+        if "payload_sample" not in chunk.columns or "src_ip" not in chunk.columns:
+            return chunk
+        pay = chunk["payload_sample"].fillna("").astype(str)
+        is_auth = pay.str.contains(_AUTH_ATTEMPT_RE, regex=True)
+        if not is_auth.any():
+            return chunk
+        now = time.monotonic()
+        for src, n in chunk.loc[is_auth, "src_ip"].value_counts().items():
+            dq = self._auth_hits.setdefault(src, deque())
+            dq.extend([now] * int(n))
+        flagged = set()
+        for src in list(self._auth_hits):
+            dq = self._auth_hits[src]
+            while dq and now - dq[0] > _BRUTE_WINDOW_S:
+                dq.popleft()
+            if not dq:
+                del self._auth_hits[src]
+            elif len(dq) >= _BRUTE_MIN_ATTEMPTS:
+                flagged.add(src)
+        mask = is_auth & chunk["src_ip"].isin(flagged)
+        if not mask.any():
+            return chunk
+        chunk = chunk.copy()
+        if "sig_attack_type" not in chunk.columns:
+            chunk["sig_attack_type"] = None
+        newly = chunk["sig_attack_type"].isna() & mask
+        if not newly.any():
+            return chunk
+        chunk.loc[newly, "sig_attack_type"] = "BruteForce"
+        chunk["pred_binary"] = chunk["pred_binary"] if "pred_binary" in chunk.columns else 0
+        chunk.loc[newly, "pred_binary"] = 1
+        if "confidence" in chunk.columns:
+            chunk.loc[newly, "confidence"] = chunk.loc[newly, "confidence"].clip(lower=0.75)
+        else:
+            chunk.loc[newly, "confidence"] = 0.75
         return chunk
 
     def _run_exfil(self, chunk: pd.DataFrame) -> pd.DataFrame:

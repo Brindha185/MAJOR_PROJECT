@@ -21,7 +21,8 @@ export default function FeedCards({ events }) {
         return (
           <div className={`card sev${e.severity}`} key={e.id}>
             {e.blocked && <div className="stamp">BLOCKED</div>}
-            <b>{info.label}</b> <span className="chip" style={{ float: 'right' }}>{e.severity}</span>
+            <b>{info.label}</b>{e.count > 1 && <span className="chip mt" style={{ marginLeft: 8 }}>×{e.count.toLocaleString()}</span>}
+            <span className="chip" style={{ float: 'right' }}>{e.severity}</span>
             {e.detected_by && <div className="via">detected by <b>{e.detected_by}</b> layer</div>}
             <div className="m">
               <span className="mono">{e.src_ip}</span>{e.dst_port ? <> &nbsp;→&nbsp; port <span className="mono">{e.dst_port}</span></> : null}

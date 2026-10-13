@@ -158,13 +158,17 @@ export default function AttackDiagram({ attackers, events, underAttack }) {
   // Animate only events that arrived since the last payload; one burst per
   // attacker per update so a flood stays readable.
   useEffect(() => {
+    // rev (not id): a merged flood row keeps its id but its rev bumps, so an ongoing
+    // attack keeps animating.
+    const rev = (e) => e.rev ?? e.id
+    const newest = events.reduce((m, e) => Math.max(m, rev(e)), 0)
     if (lastId.current === null) {
-      lastId.current = events.length ? events[0].id : 0
+      lastId.current = newest
       return
     }
-    const fresh = events.filter((e) => e.id > lastId.current)
+    const fresh = events.filter((e) => rev(e) > lastId.current)
     if (!fresh.length) return
-    lastId.current = events[0].id
+    lastId.current = newest
     const done = new Set()
     fresh.slice().reverse().forEach((e) => {
       const y = posRef.current[e.src_ip]

@@ -87,7 +87,7 @@ export default function DetailsPage({ events, attackers, attackCounts }) {
             {rows.map((e) => (
               <tr className="r" key={e.id} onClick={() => setSelId(e.id)}>
                 <td className="mono">{e.time}</td>
-                <td><b>{infoFor(e.attack).label}</b></td>
+                <td><b>{infoFor(e.attack).label}</b>{e.count > 1 ? ` ×${e.count.toLocaleString()}` : ''}</td>
                 <td className="mono">{e.src_ip}</td>
                 <td className="mono">{e.dst_port || '—'}</td>
                 <td>{e.confidence}</td>

@@ -22,7 +22,7 @@ function groupAttackers(events) {
         lastAge: e.age_s, firstTime: e.time, actorClass: e.actor_class }
       map.set(e.src_ip, a)
     }
-    a.count += 1
+    a.count += e.count || 1
     if (!a.types.includes(e.attack)) a.types.push(e.attack)
     a.blocked = a.blocked || e.blocked
     a.firstTime = e.time                          // ends as the oldest event's time

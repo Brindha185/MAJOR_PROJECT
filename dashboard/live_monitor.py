@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Ring buffer capacities
 _MAX_EVENTS     = 500     # keep last N detection events
+_MERGE_WINDOW_S = 10.0   # same source + same attack within this long = one row with a count
 _MAX_ANOMALY_POINTS = 400  # rolling window of per-flow anomaly scores
 _MAX_THROUGHPUT = 120     # keep last N throughput samples (2 min @ 1 Hz)
 
@@ -62,6 +63,8 @@ class DetectionEvent:
     action:      str
     extra:       dict = field(default_factory=dict)
     seq:         int = 0   # monotonically increasing id, lets the UI tell new events from old
+    repeat:      int = 1   # detections merged into this row (a flood = one row, not 30,000)
+    rev:         int = 0   # bumps on every merge, so the UI can still animate an ongoing attack
 
     @property
     def age_s(self) -> float:
@@ -89,6 +92,8 @@ class DetectionEvent:
             # the SECURE/UNDER ATTACK banner, MITRE technique, target port,
             # and whether SENTINEL's blacklist actually issued a block.
             "id":             self.seq,
+            "count":          self.repeat,
+            "rev":            self.rev,
             "age_s":          self.age_s,
             "technique":      self.extra.get("mitre_technique", ""),
             "dst_port":       self.extra.get("dst_port", 0),
@@ -156,7 +161,20 @@ class LiveMonitor:
         )
         with self._lock:
             self._total_attacks += 1
-            det.seq = self._total_attacks
+            det.seq = det.rev = self._total_attacks
+            # A flood or scan raises thousands of detections of one attack from one
+            # source; keeping each as its own row pushed every other attack out of the
+            # 500-row window (a 10 s hping3 flood buried a whole rehearsal). Merge them.
+            last = self._events[-1] if self._events else None
+            if (last is not None and last.src_ip == det.src_ip
+                    and last.attack_type == det.attack_type
+                    and det.timestamp - last.timestamp <= _MERGE_WINDOW_S):
+                last.repeat += 1
+                last.rev = det.rev
+                last.timestamp = det.timestamp
+                if det.extra.get("blocked"):
+                    last.extra["blocked"] = True
+                return
             self._events.append(det)
 
     def record_anomaly(self, sample: list, n_total: int, n_flagged: int) -> None:
@@ -225,8 +243,8 @@ class LiveMonitor:
         attack_counts:   dict[str, int] = {}
         severity_counts: dict[str, int] = {}
         for ev in events_snap:
-            attack_counts[ev.attack_type]   = attack_counts.get(ev.attack_type, 0)   + 1
-            severity_counts[ev.severity]    = severity_counts.get(ev.severity, 0)    + 1
+            attack_counts[ev.attack_type]   = attack_counts.get(ev.attack_type, 0)   + ev.repeat
+            severity_counts[ev.severity]    = severity_counts.get(ev.severity, 0)    + ev.repeat
 
         current_fps = tput_snap[-1].fps if tput_snap else 0.0
 

@@ -130,6 +130,7 @@ _PAYLOAD_CAP_BYTES = 2048
 # looks.
 _BEACON_HISTORY_LEN         = 20     # connections tracked per (src,dst) pair
 _BEACON_MIN_CONNECTIONS     = 5      # minimum history before scoring at all
+_BEACON_WINDOW_S            = 120.0  # only connections this recent are scored (older traffic is not part of the pattern)
 _BEACON_MAX_CV              = 0.25   # interval coefficient-of-variation ceiling
 _BEACON_MIN_MEAN_INTERVAL_S = 2.0    # floor below which it's a scan, not a beacon
 
@@ -777,7 +778,19 @@ class FlowCollector:
         """
         with self._lock:
             raw_history = list(self._conn_history.get((src_ip, dst_ip), ()))
-        history = [ts for ts, _port in raw_history]
+        # Score one destination port at a time, over a recent window. The history is
+        # per (src, dst) pair across ALL ports, so a beacon to :80 was being scored
+        # together with the same laptop's honeypot probes, flood and upload (found
+        # live 2026-10-13: 20 mixed connections, CV 1.75, never a beacon).
+        if raw_history:
+            newest = raw_history[-1][0]
+            by_port: dict = {}
+            for ts, port in raw_history:
+                if newest - ts <= _BEACON_WINDOW_S:
+                    by_port.setdefault(port, []).append(ts)
+            history = max(by_port.values(), key=len) if by_port else []
+        else:
+            history = []
 
         if len(history) < _BEACON_MIN_CONNECTIONS:
             return {"conn_count": len(history), "is_beacon": False,
