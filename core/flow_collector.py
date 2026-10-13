@@ -87,6 +87,14 @@ _BULK_MAX_GAP_S = 1.0   # max inter-packet gap (s) within a bulk run
 # SYN for the same in-progress handshake (TCP's initial RTO is normally
 # >=1s, so 3s comfortably avoids that ambiguity).
 _SYN_REUSE_IDLE_S = 3.0
+# How long a closed (FIN/FIN or RST) connection's 5-tuple is remembered, so the
+# trailing ACK/FIN/RST packets of the TCP shutdown don't start a phantom new flow
+# (the equivalent of TCP's TIME_WAIT). Without this, every normally closed HTTP
+# connection left a 2-packet "flow" (one FIN, one ACK) that lingered until the idle
+# sweep and was then scored by the ML model as a port scan -- found live 2026-10-13
+# when ordinary curl traffic got a benign laptop auto-blocked.
+_TIME_WAIT_S = 30.0
+_CLOSED_MEMORY_MAX = 20_000
 
 # Per-packet and per-flow payload capture caps for Layer 2 signature matching
 # (detection/layer2_signatures.py) — bounded so a flow can never accumulate
@@ -597,6 +605,7 @@ class FlowCollector:
         self._flows: Dict[FlowKey, _FlowState] = {}
         self._creation_order: List[FlowKey] = []
         self._completed: List[dict] = []
+        self._closed_at: Dict[FlowKey, float] = {}   # 5-tuple -> close time (TIME_WAIT memory)
         self._lock = threading.Lock()
 
         # (src_ip, dst_ip) -> deque of (timestamp, dst_port) per connection,
@@ -656,6 +665,16 @@ class FlowCollector:
             # (RTO is normally >=1s) during an in-progress handshake isn't
             # mistaken for a new connection and split into two flow rows.
             is_new_syn = bool(pi.tcp_flags & _SYN) and not (pi.tcp_flags & _ACK)
+
+            # Trailing packet of a connection we already closed: drop it. A genuinely
+            # new connection on the same 5-tuple starts with a fresh SYN, which is
+            # allowed through (and clears the memory).
+            if state is None:
+                closed_ts = self._closed_at.get(key)
+                if closed_ts is not None:
+                    if not is_new_syn and pi.ts - closed_ts < _TIME_WAIT_S:
+                        return
+                    del self._closed_at[key]
             if state is not None and is_new_syn and pi.ts - state.last_ts > _SYN_REUSE_IDLE_S:
                 state.closed_by = "reused_port"
                 self._completed.append(state.to_row())
@@ -679,6 +698,10 @@ class FlowCollector:
                 self._n_flows_completed += 1
                 del self._flows[key]
                 self._creation_order.remove(key)
+                self._closed_at[key] = pi.ts
+                if len(self._closed_at) > _CLOSED_MEMORY_MAX:
+                    self._closed_at = {k: t for k, t in self._closed_at.items()
+                                       if pi.ts - t < _TIME_WAIT_S}
 
     def _evict_oldest_locked(self) -> None:
         """Force-close the oldest open flow. Caller must hold self._lock."""
