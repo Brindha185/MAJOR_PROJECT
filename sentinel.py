@@ -1388,11 +1388,25 @@ class _PcapReplayer:
 
     _REPLAY_MAX_GAP_S = 1.0
 
-    def __init__(self, pcap_path: str, prn, speed: float = 1.0, loop: bool = False) -> None:
+    def __init__(self, pcap_path: str, prn, speed: float = 1.0, loop: bool = False,
+                 lan_only: bool = False) -> None:
         self._path, self._prn = pcap_path, prn
+        self._lan_only = lan_only
         self._speed, self._loop = max(speed, 0.01), loop
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="pcap-replay", daemon=True)
+
+    @staticmethod
+    def _is_lan(pkt) -> bool:
+        """Both endpoints private -- the replay equivalent of the live BPF
+        'src net X and dst net X' filter that keeps internet background noise out."""
+        try:
+            from scapy.layers.inet import IP
+            import ipaddress
+            ip = pkt[IP]
+            return ipaddress.ip_address(ip.src).is_private and ipaddress.ip_address(ip.dst).is_private
+        except Exception:
+            return False
 
     def start(self) -> None:
         self._thread.start()
@@ -1409,6 +1423,8 @@ class _PcapReplayer:
                     for pkt in reader:
                         if self._stop.is_set():
                             return
+                        if self._lan_only and not self._is_lan(pkt):
+                            continue
                         ts = float(pkt.time)
                         if prev_ts is not None:
                             gap = min(max(ts - prev_ts, 0.0), self._REPLAY_MAX_GAP_S) / self._speed
@@ -1472,7 +1488,8 @@ def _run_live(args) -> None:
             if not Path(args.pcap).is_file():
                 raise FileNotFoundError(args.pcap)
             flow_sniffer = _PcapReplayer(args.pcap, collector.ingest_packet,
-                                         speed=args.replay_speed, loop=args.loop)
+                                         speed=args.replay_speed, loop=args.loop,
+                                         lan_only=args.replay_lan_only)
             flow_sniffer.start()
             logger.info("Replaying %s at %.1fx (no network capture)",
                         args.pcap, args.replay_speed)
@@ -1754,6 +1771,9 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="PCAP replay speed multiplier")
     live.add_argument("--loop",          action="store_true",
                       help="Restart the PCAP when it ends")
+    live.add_argument("--replay-lan-only", action="store_true",
+                      help="During --pcap replay, drop packets with a public IP at either end "
+                           "(same effect as the live LAN-only capture filter)")
 
     # --- health ---
     sub.add_parser("health", help="Verify all 33 modules load cleanly")

@@ -13,8 +13,9 @@ const LINE_TO = SERVER.x - 82   // where it lands on the rack
 
 const slotsFor = (n) => {
   if (n <= 1) return [SERVER.y]
-  const top = 115
-  const bot = 445
+  // 3+ attackers need more room so each node's BLOCKED label and IP label never collide.
+  const top = n >= 3 ? 82 : 115
+  const bot = n >= 3 ? 478 : 445
   return Array.from({ length: n }, (_, i) => top + (i * (bot - top)) / (n - 1))
 }
 
@@ -219,9 +220,9 @@ export default function AttackDiagram({ attackers, events, underAttack }) {
             <g transform={`translate(${NODE_X},${y})`}>
               <g className="icon"><LaptopGlyph stroke={stroke} active={active && !a.blocked} banned={a.blocked} /></g>
             </g>
-            <text x={NODE_X} y={y + 66} textAnchor="middle" className="ip-label">{ip}</text>
+            <text x={NODE_X} y={y + 62} textAnchor="middle" className="ip-label">{ip}</text>
             {a.blocked && (
-              <text x={NODE_X} y={y - 52} textAnchor="middle" className="blocked-label">BLOCKED</text>
+              <text x={NODE_X} y={y - 46} textAnchor="middle" className="blocked-label">BLOCKED</text>
             )}
           </g>
         )
