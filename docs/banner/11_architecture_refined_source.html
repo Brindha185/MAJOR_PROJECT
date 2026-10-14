@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>SENTINEL architecture</title>
+<style>
+:root{--bg:#2a2119;--panel:#352a20;--panel2:#41342a;--line:#6a5645;--ink:#fbf3e6;--dim:#cdbba4;--sand:#ead7b0;--org:#f0914a;--yel:#ffd23f;--grn:#7ad17f;--red:#f04848;
+--sans:'Segoe UI Variable Display','Segoe UI',Inter,system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;width:1250px;height:1010px}
+body{background:radial-gradient(800px 420px at 92% -6%,#4c3926 0,transparent 62%),radial-gradient(700px 420px at -5% 108%,#3d2d1f 0,transparent 60%),var(--bg);
+color:var(--ink);font-family:var(--sans);position:relative;overflow:hidden}
+.abs{position:absolute}
+.box{position:absolute;background:var(--panel);border:1.5px solid var(--line);border-radius:16px;padding:12px 16px;display:flex;flex-direction:column;justify-content:center}
+.box h4{margin:0;font-size:21px;font-weight:700;line-height:1.15}
+.box p{margin:4px 0 0;font-size:15px;color:var(--dim);line-height:1.3}
+.box .tag{font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:4px}
+.sense{border-top:5px solid var(--sand)}.sense .tag{color:var(--sand)}
+.det{border-top:5px solid var(--org)}.det .tag{color:var(--org)}
+.exp{border-top:5px solid var(--yel)}.exp .tag{color:var(--yel)}
+.rsp{border-top:5px solid var(--grn)}.rsp .tag{color:var(--grn)}
+.num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--org);color:#1d150f;font-weight:800;font-size:17px;margin-right:10px}
+.engine{position:absolute;left:30px;top:222px;width:980px;height:272px;border:2px solid var(--org);border-radius:22px;background:rgba(240,145,74,.07)}
+.engine .cap{position:absolute;left:22px;top:12px;font-size:16px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--org)}
+.engine .cap b{color:var(--ink);letter-spacing:.02em;text-transform:none;font-weight:600;margin-left:10px;font-size:16px}
+.ribbon{position:absolute;left:30px;top:22px;width:1190px;display:flex;justify-content:center;gap:22px;font-size:25px;font-weight:800;letter-spacing:.14em}
+.ribbon span.a{color:var(--sand)}.ribbon span.b{color:var(--org)}.ribbon span.c{color:var(--yel)}.ribbon span.d{color:var(--grn)}.ribbon i{font-style:normal;color:var(--dim);font-weight:400}
+.dash{position:absolute;left:30px;top:838px;width:1190px;height:76px;border-radius:18px;background:linear-gradient(90deg,#4a382a,#3a2c20);border:2px solid var(--sand);display:flex;align-items:center;gap:22px;padding:0 28px}
+.dash h4{margin:0;font-size:24px;letter-spacing:.06em;font-weight:800}
+.dash span{font-size:16px;color:var(--dim)}
+.chips{position:absolute;left:30px;top:938px;width:1190px;display:flex;gap:12px;align-items:center;flex-wrap:nowrap}
+.chips em{font-style:normal;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-right:6px}
+.chips b{font-weight:600;font-size:16px;padding:7px 16px;border-radius:99px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:#eadcc6}
+.lbl{position:absolute;font-size:14px;color:var(--dim);font-style:italic}
+svg{position:absolute;left:0;top:0;pointer-events:none}
+</style></head><body>
+
+<div class="ribbon"><span class="a">SENSE</span><i>➜</i><span class="b">DETECT</span><i>➜</i><span class="c">EXPLAIN</span><i>➜</i><span class="d">RESPOND</span></div>
+
+<!-- SENSE -->
+<div class="box sense" style="left:30px;top:84px;width:215px;height:100px"><div class="tag">Input</div><h4>Network traffic</h4><p>live TCP / UDP on the LAN</p></div>
+<div class="box sense" style="left:305px;top:84px;width:320px;height:100px"><div class="tag">Sense</div><h4>Packet capture</h4><p>Scapy · Npcap · full PCAP kept</p></div>
+<div class="box sense" style="left:685px;top:84px;width:325px;height:100px"><div class="tag">Sense</div><h4>Flow assembly</h4><p>packets → flows · ~80 CIC-style features</p></div>
+<div class="box sense" style="left:1040px;top:84px;width:180px;height:100px"><div class="tag">Decoys</div><h4>Honeypots</h4><p>fake SSH · FTP · API</p></div>
+
+<!-- DETECT -->
+<div class="engine"><div class="cap">Detection engine<b>every flow is checked by all 3 layers, in order</b></div></div>
+<div class="box det" style="left:52px;top:282px;width:285px;height:170px"><h4><span class="num">1</span>ML model</h4><p>XGBoost classifier trained on known attacks (CIC-IDS-2017/18)</p></div>
+<div class="box det" style="left:377px;top:282px;width:285px;height:170px"><h4><span class="num">2</span>Signatures &amp; rules</h4><p>known attack patterns, plus behaviour rules: DoS · beacon · brute force</p></div>
+<div class="box det" style="left:702px;top:282px;width:285px;height:170px"><h4><span class="num">3</span>Anomaly detector</h4><p>Isolation Forest scores never-seen-before (zero-day) traffic</p></div>
+<div class="abs" style="left:30px;top:462px;width:980px;text-align:center;font-size:15px;color:var(--dim)">verdict = attack type · confidence · which layer caught it</div>
+
+<!-- EXPLAIN -->
+<div class="box exp" style="left:30px;top:524px;width:320px;height:112px"><div class="tag">Enrich</div><h4>Threat intelligence</h4><p>IP reputation · Tor exit-node list</p></div>
+<div class="box exp" style="left:370px;top:524px;width:320px;height:112px"><div class="tag">Attribute</div><h4>MITRE ATT&amp;CK mapping</h4><p>geolocation · attacker profile · risk score</p></div>
+<div class="box exp" style="left:710px;top:524px;width:300px;height:112px"><div class="tag">Explain</div><h4>Explainability</h4><p>SHAP feature evidence · plain-English reason</p></div>
+
+<!-- RESPOND -->
+<div class="box rsp" style="left:30px;top:690px;width:320px;height:112px"><div class="tag">Learn</div><h4>Adaptive retraining</h4><p>collects missed attacks, retrains the model</p></div>
+<div class="box rsp" style="left:370px;top:690px;width:320px;height:112px"><div class="tag">Record</div><h4>Forensics</h4><p>PCAP logging · attack timeline</p></div>
+<div class="box rsp" style="left:710px;top:690px;width:300px;height:112px"><div class="tag">Respond</div><h4>Response</h4><p>IP blacklist · rate limit · alerts · session kill</p></div>
+
+<!-- DASHBOARD -->
+<div class="dash"><h4>LIVE SOC DASHBOARD</h4><span>Live Attack Map · Attack Details · Anomaly Detection · MITRE &amp; Response</span></div>
+
+<div class="chips"><em>Powered by</em><b>Python</b><b>Scapy</b><b>XGBoost</b><b>scikit-learn</b><b>SHAP</b><b>Flask + React</b><b>MITRE ATT&amp;CK</b><b>CIC-IDS 2017/18</b></div>
+
+<!-- arrows -->
+<svg width="1250" height="1010" viewBox="0 0 1250 1010">
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto"><path d="M0 0L15 7.5L0 15z" fill="#ead7b0"/></marker>
+    <marker id="o" markerUnits="userSpaceOnUse" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto"><path d="M0 0L15 7.5L0 15z" fill="#f0914a"/></marker>
+    <marker id="g" markerUnits="userSpaceOnUse" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto"><path d="M0 0L15 7.5L0 15z" fill="#7ad17f"/></marker>
+  </defs>
+  <g stroke="#ead7b0" stroke-width="3.5" fill="none" marker-end="url(#a)">
+    <path d="M245 134 H300"/><path d="M625 134 H680"/>
+    <path d="M848 184 V218"/>
+  </g>
+  <g stroke="#f0914a" stroke-width="3.5" fill="none" marker-end="url(#o)">
+    <path d="M337 367 H373"/><path d="M662 367 H698"/>
+    <path d="M190 494 V520"/><path d="M530 494 V520"/><path d="M860 494 V520"/>
+  </g>
+  <!-- explain -> respond -->
+  <g stroke="#ffd23f" stroke-width="3" fill="none" marker-end="url(#g)">
+    <path d="M860 636 V686"/><path d="M530 636 V686"/>
+  </g>
+  <!-- to dashboard -->
+  <g stroke="#7ad17f" stroke-width="3.5" fill="none" marker-end="url(#g)">
+    <path d="M190 802 V834"/><path d="M530 802 V834"/><path d="M860 802 V834"/>
+  </g>
+  <!-- honeypot bypass: straight to Response -->
+  <path d="M1190 184 V746 H1014" stroke="#f04848" stroke-width="3.5" stroke-dasharray="11 8" fill="none" marker-end="url(#g)"/>
+  <!-- adaptive retraining loop back to the ML model -->
+  <path d="M30 746 H12 V367 H48" stroke="#ead7b0" stroke-width="3.5" stroke-dasharray="11 8" fill="none" marker-end="url(#a)"/>
+</svg>
+<div class="lbl" style="left:1030px;top:380px;width:150px;color:#f6a3a3;text-align:right">Honeypot hit =<br>100% malicious,<br>skips detection,<br>goes straight to<br>Response</div>
+<div class="lbl" style="left:46px;top:700px;display:none"></div>
+</body></html>
